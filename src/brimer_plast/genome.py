@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pyfaidx
 
-from brimer_plast.models import ConservedExonChain, ExonInfo
+from brimer_plast.models import ConservedExonChain, ExonInfo, GeneLocus
 
 
 # ── flat parsing (backward-compat) ───────────────────────────────────────────
@@ -407,6 +407,57 @@ def _exons_in_template_order(exons: list[ExonInfo]) -> list[ExonInfo]:
         return sorted(exons, key=lambda e: e.start)
 
 
+def get_gene_locus(
+    gtf_path: str | Path,
+    target_gene: str | None = None,
+    target_transcript: str | None = None,
+) -> GeneLocus | None:
+    """Fetch all transcripts and coordinates for the target gene/transcript.
+
+    If target_transcript is provided, it finds the sibling gene and returns
+    all transcripts for that gene.
+    """
+    resolved_gene = target_gene
+    if target_transcript:
+        resolved_gene = _find_gene_for_transcript(gtf_path, target_transcript)
+
+    if not resolved_gene:
+        return None
+
+    transcripts = parse_gtf_grouped_by_transcript(gtf_path, target_gene=resolved_gene)
+    if not transcripts:
+        return None
+
+    # Deduplicate transcripts by exon structure (same seqid, strand, and starts/ends)
+    unique_transcripts: dict[str, list[ExonInfo]] = {}
+    seen_structures = set()
+    for tid, exons in transcripts.items():
+        struct = tuple((e.start, e.end) for e in exons)
+        if struct not in seen_structures:
+            unique_transcripts[tid] = exons
+            seen_structures.add(struct)
+
+    first_exons = list(unique_transcripts.values())[0]
+    seqid = first_exons[0].seqid
+    strand = first_exons[0].strand
+
+    all_starts = []
+    all_ends = []
+    for exons in unique_transcripts.values():
+        for e in exons:
+            all_starts.append(e.start)
+            all_ends.append(e.end)
+
+    return GeneLocus(
+        gene_name=resolved_gene,
+        seqid=seqid,
+        strand=strand,
+        transcripts=unique_transcripts,
+        min_start=min(all_starts),
+        max_end=max(all_ends),
+    )
+
+
 def _compute_junction_positions(exons: list[ExonInfo]) -> list[int]:
     """Return 1-based junction positions within the template.
 
@@ -499,6 +550,69 @@ def _compute_unique_junction_positions(
             result.append(cumulative_len + 1)
 
     return result
+
+
+def template_to_genomic(
+    template_pos_0based: int,
+    primer_length: int,
+    exons: list[ExonInfo],
+) -> list[tuple[str, int, int, str]]:
+    """Map a template-relative position back to genomic coordinates.
+
+    A single template position may map to multiple genomic fragments
+    if it spans an exon-exon junction.
+
+    Returns:
+        List of (seqid, start, end, strand) fragments.
+    """
+    ordered = _exons_in_template_order(exons)
+    fragments = []
+    
+    current_template_pos = 0
+    remaining_primer_len = primer_length
+    primer_start_found = False
+    
+    for exon in ordered:
+        exon_len = exon.end - exon.start + 1
+        
+        if not primer_start_found:
+            if current_template_pos + exon_len > template_pos_0based:
+                # Primer starts in this exon
+                primer_start_found = True
+                offset_in_exon = template_pos_0based - current_template_pos
+                
+                # Length available in this first exon
+                len_in_this_exon = min(remaining_primer_len, exon_len - offset_in_exon)
+                
+                if exon.strand == "+":
+                    g_start = exon.start + offset_in_exon
+                    g_end = g_start + len_in_this_exon - 1
+                else:
+                    g_end = exon.end - offset_in_exon
+                    g_start = g_end - len_in_this_exon + 1
+                
+                fragments.append((exon.seqid, int(g_start), int(g_end), exon.strand))
+                remaining_primer_len -= len_in_this_exon
+            
+            current_template_pos += exon_len
+        else:
+            # We already found the start, are there more bits in subsequent exons?
+            if remaining_primer_len <= 0:
+                break
+                
+            len_in_this_exon = min(remaining_primer_len, exon_len)
+            
+            if exon.strand == "+":
+                g_start = exon.start
+                g_end = g_start + len_in_this_exon - 1
+            else:
+                g_end = exon.end
+                g_start = g_end - len_in_this_exon + 1
+                
+            fragments.append((exon.seqid, int(g_start), int(g_end), exon.strand))
+            remaining_primer_len -= len_in_this_exon
+            
+    return fragments
 
 
 def get_target_information(
