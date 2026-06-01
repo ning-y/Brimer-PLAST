@@ -140,6 +140,20 @@ A typed data structure (``ExonInfo`` dataclass) that holds seqid, start, end,
 and strand for a single exon parsed from GTF annotations.
 _Avoid_: Raw dict, untyped exon coordinate
 
+**Gene Locus**:
+The full genomic coordinates and collection of all annotated transcripts for a 
+given gene. Used as the biological context for report visualizations.
+
+**Genome View**:
+A visualization in the PDF report showing the gene locus, coordinate axis, all 
+stacked transcripts, and designed primer binding sites. Replaces the 
+internal design-chain visualization.
+
+**Transcriptome-to-genome mapping**:
+The process of translating coordinates from a spliced mRNA sequence back to 
+genomic chromosome coordinates. Used to ensure compatibility between 
+different data sources (Primer3, tnBLAST) in the Genome View.
+
 ## Example dialogue
 
 **Dev**: I ran Brimer-PLAST on the mouse genome targeting the GAPDH gene. It returned a primer set of 12 specificity-filtered primer pairs.

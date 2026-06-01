@@ -20,6 +20,9 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Outputs
+brimer_plast_*.pdf
+
 # Test data downloads (full-scale integration tests)
 *.fa
 *.gtf
