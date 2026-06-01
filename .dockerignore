@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Project
+tests/
+.git/
+.gitignore
+flake.nix
+flake.lock
+
+# Documentation — excluded from image,
+# but keep README.md since pyproject.toml declares readme = "README.md"
+*.md
+!README.md
+
+# OS
+.DS_Store

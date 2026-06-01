@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Nix
+result*
+.direnv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Test data downloads (full-scale integration tests)
+*.fa
+*.gtf
+*.fa.gz
+*.gtf.gz
+
+# But keep the synthetic fixtures committed
+!/tests/fixtures/mini_genome.fa
+!/tests/fixtures/mini_genome.gtf

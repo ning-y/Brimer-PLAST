@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "brimer-plast"
+version = "0.1.0"
+description = "PCR primer design using primer3-py + tnBLAST"
+readme = "README.md"
+license = { text = "GPL-2.0-only" }
+requires-python = ">=3.12"
+dependencies = [
+    "primer3-py >=2.1.0",
+    "typer >=0.12.0,<2.0.0",
+    "pyfaidx >=0.8.0",
+]
+
+[project.scripts]
+brimer-plast = "brimer_plast.cli:app"
+
+[project.optional-dependencies]
+dev = [
+    "pytest >=8.0",
+    "ruff >=0.5.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N"]
