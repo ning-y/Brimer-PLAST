@@ -1,7 +1,10 @@
 """Brimer-PLAST command-line interface."""
 
+import hashlib
 import os
+import subprocess
 import tempfile
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -11,9 +14,12 @@ from brimer_plast.filter import filter_specific_pairs, run_tnblast, write_assay_
 from brimer_plast.genome import (
     build_transcript_to_gene_map,
     build_transcriptome_fasta,
+    get_gene_locus,
     get_target_information,
+    template_to_genomic,
 )
-from brimer_plast.models import ConservedExonChain
+from brimer_plast.models import ConservedExonChain, GeneLocus, PrimerPair
+from brimer_plast.pdf_report import build_pdf_report
 from brimer_plast.primer import DEFAULT_PRIMER_ARGS, design_primers
 
 app = typer.Typer(
@@ -21,6 +27,30 @@ app = typer.Typer(
     help="Design qRT-PCR primers (exon-exon junction-spanning) from a genome "
     "and annotation using primer3, then filter for specificity with tnBLAST.",
 )
+
+
+def calculate_md5(path: Path) -> str:
+    """Calculate MD5 checksum of a file."""
+    hash_md5 = hashlib.md5()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
+
+
+def get_git_version() -> str:
+    """Get the current git version string if available."""
+    try:
+        # Check if we're in a git repo
+        result = subprocess.run(
+            ["git", "describe", "--always", "--dirty"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return result.stdout.strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return "0.1.0"
 
 
 @app.callback(invoke_without_command=True)
@@ -128,6 +158,11 @@ def main(
         "--tsv",
         help="Output results as tab-separated values (machine-readable).",
     ),
+    no_pdf: bool = typer.Option(
+        False,
+        "--no-pdf",
+        help="Suppress PDF report generation.",
+    ),
 ) -> None:
     """Design primers for a target and filter for specificity.
 
@@ -154,6 +189,11 @@ def main(
     try:
         chains: list[ConservedExonChain] = get_target_information(
             fasta_path=genome,
+            gtf_path=annotations,
+            target_gene=target_gene,
+            target_transcript=target_transcript,
+        )
+        locus: Optional[GeneLocus] = get_gene_locus(
             gtf_path=annotations,
             target_gene=target_gene,
             target_transcript=target_transcript,
@@ -219,6 +259,7 @@ def main(
         candidate_pairs = design_primers(
             chain.template,
             sequence_id=chain.id,
+            chain_id=chain.id,
             global_args=global_args,
             junction_positions=junction_positions,
             required_junction_positions=required_junction_positions,
@@ -261,12 +302,14 @@ def main(
         build_transcriptome_fasta(genome, annotations, transcriptome_path)
 
         try:
+            genome_out = os.path.join(tmp_dir, "tntblast_genome.txt")
             genome_counts = run_tnblast(
                 assay_path,
                 genome,
                 max_amplicon=max_amplicon,
                 min_tm=min_tm,
                 max_tm=max_tm,
+                output_path=genome_out,
             )
             transcriptome_out = os.path.join(tmp_dir, "tntblast_transcriptome.txt")
             run_tnblast(
@@ -281,17 +324,21 @@ def main(
             typer.echo(f"  tnBLAST error: {e}", err=True)
             raise typer.Exit(code=1)
 
-        # Re-parse transcriptome tnBLAST output with verbose parser
-        from brimer_plast.filter import _parse_tnblast_output_verbose
+        # Re-parse genome tnBLAST output for Panel B amplicon coordinates
+        from brimer_plast.filter import _parse_tnblast_amplicons
 
-        transcriptome_raw = _parse_tnblast_output_verbose(transcriptome_out)
+        genome_amplicons = _parse_tnblast_amplicons(genome_out)
+
+        # Re-parse transcriptome tnBLAST output for mapping
+        transcriptome_amplicons = _parse_tnblast_amplicons(transcriptome_out)
 
         # Map transcript IDs to gene names
         t2g = build_transcript_to_gene_map(annotations)
         transcriptome_targets: dict[str, list[str]] = {}
-        for name, tids in transcriptome_raw.items():
+        for name, hits in transcriptome_amplicons.items():
             genes = set()
-            for tid in tids:
+            for hit in hits:
+                tid = hit.seqid
                 gene = t2g.get(tid, tid)
                 genes.add(gene)
             transcriptome_targets[name] = list(genes)
@@ -300,9 +347,7 @@ def main(
         if target_gene:
             resolved_gene = target_gene
         elif target_transcript:
-            resolved_gene = build_transcript_to_gene_map(annotations).get(
-                target_transcript, target_transcript
-            )
+            resolved_gene = t2g.get(target_transcript, target_transcript)
         else:
             resolved_gene = ""
 
@@ -313,6 +358,33 @@ def main(
             target_gene=resolved_gene,
             junction_mode=not disable_junction_overlap,
         )
+
+        # Attach coordinates for Panel B (Sanity Check)
+        for i, pair in enumerate(flat_pairs, start=1):
+            name = f"pair_{i}"
+
+            # Priority 1: Use direct genome hits (only in --disable-junction-overlap mode)
+            if name in genome_amplicons and genome_amplicons[name]:
+                hit = genome_amplicons[name][0]
+                pair.tntblast_seqid = hit.seqid
+                pair.tntblast_amplicon_start = hit.amplicon_start
+                pair.tntblast_amplicon_end = hit.amplicon_end
+            # Priority 2: Use mRNA hits mapped back to genome (works for junction mode)
+            elif name in transcriptome_amplicons and transcriptome_amplicons[name]:
+                hit = transcriptome_amplicons[name][0]  # first mRNA hit
+                tid = hit.seqid
+                if locus and tid in locus.transcripts:
+                    exons = locus.transcripts[tid]
+                    # Map mRNA range (1-based) back to genomic fragments
+                    frags_start = template_to_genomic(hit.amplicon_start - 1, 1, exons)
+                    frags_end = template_to_genomic(hit.amplicon_end - 1, 1, exons)
+                    if frags_start and frags_end:
+                        # Extract single genomic point from first fragment
+                        f_start = frags_start[0]
+                        f_end = frags_end[0]
+                        pair.tntblast_seqid = f_start[0]
+                        pair.tntblast_amplicon_start = min(f_start[1], f_end[1])
+                        pair.tntblast_amplicon_end = max(f_start[2], f_end[2])
     if not filtered:
         typer.echo("  No primer pairs passed tnBLAST specificity filter.", err=True)
     else:
@@ -320,6 +392,10 @@ def main(
             f"  {len(filtered)}/{len(flat_pairs)} pairs passed filtering.",
             err=True,
         )
+
+    # Assign pair numbers
+    for i, pair in enumerate(filtered, start=1):
+        pair.pair_number = i
 
     # ── Step 5: Output results ─────────────────────────────────────────────
     typer.echo("")
@@ -351,3 +427,47 @@ def main(
                 )
     else:
         typer.echo("No specificity-filtered primer pairs to display.")
+
+    # ── Step 6: Generate PDF report ───────────────────────────────────────
+    if not no_pdf:
+        gene_slug = (target_gene or target_transcript or "unknown").replace("|", "_").replace("/", "_")
+        pdf_path = f"brimer_plast_{gene_slug}_{datetime.now():%Y%m%d_%H%M%S}.pdf"
+        typer.echo(f"\nGenerating PDF report: {pdf_path}", err=True)
+        try:
+            genome_md5 = calculate_md5(genome)
+            annotations_md5 = calculate_md5(annotations)
+            version_str = get_git_version()
+
+            build_pdf_report(
+                output_path=pdf_path,
+                chains=chains,
+                locus=locus,
+                filtered_pairs=filtered,
+                target_gene=target_gene,
+                target_transcript=target_transcript,
+                genome_path=str(genome),
+                annotations_path=str(annotations),
+                genome_md5=genome_md5,
+                annotations_md5=annotations_md5,
+                version_str=version_str,
+                cli_args={
+                    "target_gene": target_gene,
+                    "target_transcript": target_transcript,
+                    "disable_junction_overlap": disable_junction_overlap,
+                    "num_return": num_return,
+                    "min_tm": min_tm,
+                    "max_tm": max_tm,
+                    "opt_tm": opt_tm,
+                    "min_size": min_size,
+                    "max_size": max_size,
+                    "opt_size": opt_size,
+                    "min_gc": min_gc,
+                    "max_gc": max_gc,
+                    "product_min": product_size_min,
+                    "product_max": product_size_max,
+                    "max_amplicon": max_amplicon,
+                },
+            )
+            typer.echo(f"  PDF written to {pdf_path}", err=True)
+        except Exception as e:
+            typer.echo(f"  PDF generation failed: {e}", err=True)
