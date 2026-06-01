@@ -5,8 +5,10 @@ predicted off-target amplification.
 """
 
 import os
+import re
 import subprocess
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 from brimer_plast.models import PrimerPair
@@ -211,3 +213,42 @@ def _parse_tnblast_output_verbose(path: str) -> dict[str, list[str]]:
                 if tid and (not targets[current_name] or targets[current_name][-1] != tid):
                     targets[current_name].append(tid)
     return targets
+
+
+@dataclass
+class AmpliconHit:
+    """A single tnBLAST amplicon prediction with genomic coordinates."""
+
+    seqid: str
+    amplicon_start: int  # 1-based
+    amplicon_end: int  # 1-based
+
+
+def _parse_tnblast_amplicons(path: str) -> dict[str, list[AmpliconHit]]:
+    """Parse tnBLAST output into assay-name -> list of AmpliconHit.
+
+    Extracts both the target sequence ID (from ``>seqid`` lines) and the
+    amplicon range (from ``amplicon range = <start> .. <end>`` lines).
+    """
+    hits: dict[str, list[AmpliconHit]] = {}
+    current_name: str | None = None
+    current_seqid: str | None = None
+    with open(path) as f:
+        for line in f:
+            if line.startswith("name = "):
+                current_name = line[len("name = ") :].strip()
+            elif current_name is not None and line.startswith(">"):
+                current_seqid = line[1:].strip()
+            elif current_name is not None and line.startswith("amplicon range ="):
+                # "amplicon range = 285 .. 494"
+                m = re.search(r"= (\d+)\s*\.\.\s*(\d+)", line)
+                if m and current_seqid:
+                    start = int(m.group(1))
+                    end = int(m.group(2))
+                    hit = AmpliconHit(
+                        seqid=current_seqid,
+                        amplicon_start=start,
+                        amplicon_end=end,
+                    )
+                    hits.setdefault(current_name, []).append(hit)
+    return hits

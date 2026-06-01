@@ -58,6 +58,7 @@ DEFAULT_PRIMER_ARGS: dict[str, Any] = {
 def design_primers(
     template: str,
     sequence_id: str = "target",
+    chain_id: str = "",
     global_args: dict[str, Any] | None = None,
     junction_positions: list[int] | None = None,
     required_junction_positions: list[int] | None = None,
@@ -73,6 +74,7 @@ def design_primers(
     Args:
         template: The spliced exon sequence (DNA string).
         sequence_id: An identifier for the template.
+        chain_id: Chain identifier used to populate ``PrimerPair.chain_id``.
         global_args: Overrides for default primer3 global args.
         junction_positions: 1-based positions passed to Primer3 as
             ``SEQUENCE_OVERLAP_JUNCTION_LIST`` (soft penalty).
@@ -114,6 +116,8 @@ def design_primers(
 
     result: list[PrimerPair] = []
     for i in range(num_pairs):
+        left_pos = raw.get(f"PRIMER_LEFT_{i}", [0, 0])
+        right_pos = raw.get(f"PRIMER_RIGHT_{i}", [0, 0])
         pair = PrimerPair(
             forward_seq=raw.get(f"PRIMER_LEFT_{i}_SEQUENCE", ""),
             reverse_seq=raw.get(f"PRIMER_RIGHT_{i}_SEQUENCE", ""),
@@ -123,6 +127,11 @@ def design_primers(
             reverse_gc=raw.get(f"PRIMER_RIGHT_{i}_GC_PERCENT"),
             product_size=raw.get(f"PRIMER_PAIR_{i}_PRODUCT_SIZE"),
             pair_penalty=raw.get(f"PRIMER_PAIR_{i}_PENALTY"),
+            forward_start=left_pos[0],
+            forward_len=left_pos[1],
+            reverse_start=right_pos[0],
+            reverse_len=right_pos[1],
+            chain_id=chain_id,
         )
         if required_set is not None and not _pair_spans_any_junction(
             raw, i, required_set
