@@ -106,7 +106,7 @@ def _draw_fragments(canvas, fragments, y, h, view_min, view_span, origin_x, draw
             drawn_xs.append((rx1, rx2))
 
             # If segmented, connect to previous with dashed bridge
-            if i > 0 and drawn_xs:
+            if i > 0 and len(drawn_xs) >= 2:
                 prev_rx1, prev_rx2 = drawn_xs[-2]
                 canvas.setLineWidth(0.5)
                 canvas.setDash(1, 1)
