@@ -62,6 +62,7 @@
           typer
           pytest
           pyfaidx
+          reportlab
         ]);
 
       in {
