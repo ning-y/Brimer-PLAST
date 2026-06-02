@@ -229,26 +229,49 @@ def _parse_tnblast_amplicons(path: str) -> dict[str, list[AmpliconHit]]:
 
     Extracts both the target sequence ID (from ``>seqid`` lines) and the
     amplicon range (from ``amplicon range = <start> .. <end>`` lines).
+
+    tnBLAST outputs ``amplicon range`` *before* ``>seqid`` within each hit
+    section, so this parser defers emitting each hit until the ``>`` line
+    has been read — otherwise every hit would get the *previous* hit's seqid.
     """
     hits: dict[str, list[AmpliconHit]] = {}
     current_name: str | None = None
+    pending_start: int | None = None
+    pending_end: int | None = None
+
+    def _emit() -> None:
+        if (
+            current_name is not None
+            and pending_start is not None
+            and pending_end is not None
+            and current_seqid is not None
+        ):
+            hit = AmpliconHit(
+                seqid=current_seqid,
+                amplicon_start=pending_start,
+                amplicon_end=pending_end,
+            )
+            hits.setdefault(current_name, []).append(hit)
+
     current_seqid: str | None = None
     with open(path) as f:
         for line in f:
             if line.startswith("name = "):
+                # Flush any pending hit before switching to a new name
+                _emit()
+                pending_start = None
+                pending_end = None
                 current_name = line[len("name = ") :].strip()
             elif current_name is not None and line.startswith(">"):
                 current_seqid = line[1:].strip()
+                # The last ``amplicon range`` belongs to this seqid; emit now
+                _emit()
+                pending_start = None
+                pending_end = None
             elif current_name is not None and line.startswith("amplicon range ="):
                 # "amplicon range = 285 .. 494"
                 m = re.search(r"= (\d+)\s*\.\.\s*(\d+)", line)
-                if m and current_seqid:
-                    start = int(m.group(1))
-                    end = int(m.group(2))
-                    hit = AmpliconHit(
-                        seqid=current_seqid,
-                        amplicon_start=start,
-                        amplicon_end=end,
-                    )
-                    hits.setdefault(current_name, []).append(hit)
+                if m:
+                    pending_start = int(m.group(1))
+                    pending_end = int(m.group(2))
     return hits

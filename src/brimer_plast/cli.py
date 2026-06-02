@@ -408,7 +408,9 @@ def main(
         # Build transcriptome from annotation
         typer.echo("  Building transcriptome from annotations...", err=True)
         transcriptome_path = os.path.join(tmp_dir, "transcriptome.fa")
-        build_transcriptome_fasta(genome, annotations, transcriptome_path)
+        transcript_exon_map = build_transcriptome_fasta(
+            genome, annotations, transcriptome_path
+        )
 
         try:
             genome_out = os.path.join(tmp_dir, "tntblast_genome.txt")
@@ -499,15 +501,21 @@ def main(
                 if name in genome_amplicons and genome_amplicons[name]:
                     hit = genome_amplicons[name][0]
                     if locus and locus.strand == "-":
-                        f_g_start = hit.amplicon_end - f_len + 1
-                        f_g_end = hit.amplicon_end
-                        r_g_start = hit.amplicon_start
-                        r_g_end = hit.amplicon_start + r_len - 1
+                        # tnBLAST amplicon range is 0-based inclusive.
+                        # For a negative-strand gene, the forward primer
+                        # sits on the minus strand; its reverse complement
+                        # appears on the plus strand at the amplicon end.
+                        # Convert to 1-based inclusive for
+                        # genomic_range_to_fragments.
+                        f_g_start = hit.amplicon_end - f_len + 2
+                        f_g_end = hit.amplicon_end + 1
+                        r_g_start = hit.amplicon_start + 1
+                        r_g_end = hit.amplicon_start + r_len
                     else:
-                        f_g_start = hit.amplicon_start
-                        f_g_end = hit.amplicon_start + f_len - 1
-                        r_g_start = hit.amplicon_end - r_len + 1
-                        r_g_end = hit.amplicon_end
+                        f_g_start = hit.amplicon_start + 1
+                        f_g_end = hit.amplicon_start + f_len
+                        r_g_start = hit.amplicon_end - r_len + 2
+                        r_g_end = hit.amplicon_end + 1
 
                     pair.tnblast_forward_fragments = genomic_range_to_fragments(
                         f_g_start, f_g_end, exons
@@ -518,12 +526,18 @@ def main(
 
                 elif name in transcriptome_amplicons and transcriptome_amplicons[name]:
                     hit = transcriptome_amplicons[name][0]
-                    pair.tnblast_forward_fragments = template_to_genomic(
-                        hit.amplicon_start, f_len, exons
-                    )
-                    pair.tnblast_reverse_fragments = template_to_genomic(
-                        hit.amplicon_end - r_len + 1, r_len, exons
-                    )
+                    # tnBLAST transcriptome coordinates are 0-based inclusive
+                    # in the hit transcript's coordinate space.  Map through
+                    # that specific transcript's exon set so the red marker
+                    # shows where tnBLAST independently found the primer.
+                    tr_exons = transcript_exon_map.get(hit.seqid)
+                    if tr_exons is not None:
+                        pair.tnblast_forward_fragments = template_to_genomic(
+                            hit.amplicon_start, f_len, tr_exons
+                        )
+                        pair.tnblast_reverse_fragments = template_to_genomic(
+                            hit.amplicon_end - r_len + 1, r_len, tr_exons
+                        )
 
     if not filtered:
         log.warning("  No primer pairs passed tnBLAST specificity filter.")

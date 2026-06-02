@@ -348,12 +348,18 @@ def build_transcriptome_fasta(
     fasta_path: str | Path,
     gtf_path: str | Path,
     output_path: str | Path,
-) -> None:
+) -> dict[str, list[ExonInfo]]:
     """Build a transcriptome FASTA by splicing all transcripts from GTF.
 
     Extracts exon sequences from the genome FASTA and splices them per
     transcript (reverse-complementing exons on the negative strand).
     Writes a FASTA file with one entry per transcript_id.
+
+    Returns:
+        The parsed transcript-to-exon map ``{transcript_id: [ExonInfo, ...]}``
+        for all transcripts in the GTF.  Callers can use this to translate
+        tnBLAST transcriptome coordinates back to genomic positions using
+        the correct per-transcript exon list (see ``template_to_genomic``).
     """
     transcripts = parse_gtf_all_transcripts(gtf_path)
     with open(output_path, "w") as f:
@@ -363,6 +369,7 @@ def build_transcriptome_fasta(
             # Write 60-char lines for readability
             for i in range(0, len(template), 60):
                 f.write(template[i : i + 60] + "\n")
+    return transcripts
 
 
 def build_transcript_to_gene_map(
