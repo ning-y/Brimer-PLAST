@@ -10,6 +10,21 @@ from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
+class GenomicFragment:
+    """A contiguous region of the genome.
+
+    Used to represent where a primer binds on the genome.  A primer that spans
+    an exon-exon junction will have multiple GenomicFragments (one per exon).
+    Coordinates are 1-based inclusive.
+    """
+
+    seqid: str
+    start: int
+    end: int
+    strand: str  # "+" or "-"
+
+
+@dataclass(frozen=True)
 class ExonInfo:
     """Coordinates and strand of a single exon from a GTF annotation.
 
@@ -28,17 +43,15 @@ class PrimerPair:
 
     All numeric fields may be ``None`` if primer3 failed to compute them.
 
-    *Primer3 template-relative positions (Panel A)*
+    *Primer3 template-relative positions*
         *forward_start*, *forward_len*, *reverse_start*, *reverse_len* are
         0-based start positions and lengths within the spliced template
         sequence, taken directly from primer3-py's output.
 
-    *tnBLAST genome-relative positions (Panel B)*
-        *tntblast_seqid* is the chromosome/scaffold identifier from the
-        tnBLAST hit.  *tntblast_amplicon_start* and *tntblast_amplicon_end*
-        are the genomic coordinates of the predicted PCR amplicon (1-based).
-        The forward primer occupies the first *forward_len* bases of that
-        range, the reverse primer the last *reverse_len* bases.
+    *Genomic fragment lists*
+        Both primer3 and tnBLAST-derived fragments are pre-computed in
+        the CLI as ``list[GenomicFragment]``.  The renderer draws these
+        directly without any coordinate math.
     """
 
     forward_seq: str = ""
@@ -56,10 +69,13 @@ class PrimerPair:
     reverse_start: int | None = None  # 0-based in template
     reverse_len: int | None = None
 
-    # tnBLAST genome-relative amplicon (Panel B)
-    tntblast_seqid: str | None = None
-    tntblast_amplicon_start: int | None = None  # 1-based genomic
-    tntblast_amplicon_end: int | None = None  # 1-based genomic
+    # Pre-computed genomic fragments (primer3-derived, blue Panel A)
+    primer3_forward_fragments: list[GenomicFragment] = field(default_factory=list)
+    primer3_reverse_fragments: list[GenomicFragment] = field(default_factory=list)
+
+    # Pre-computed genomic fragments (tnBLAST-derived, red Panel B)
+    tnblast_forward_fragments: list[GenomicFragment] = field(default_factory=list)
+    tnblast_reverse_fragments: list[GenomicFragment] = field(default_factory=list)
 
     # Which chain this pair belongs to
     chain_id: str = ""

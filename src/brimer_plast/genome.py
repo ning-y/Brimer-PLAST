@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pyfaidx
 
-from brimer_plast.models import ConservedExonChain, ExonInfo, GeneLocus
+from brimer_plast.models import ConservedExonChain, ExonInfo, GeneLocus, GenomicFragment
 
 
 # ── flat parsing (backward-compat) ───────────────────────────────────────────
@@ -556,62 +556,82 @@ def template_to_genomic(
     template_pos_0based: int,
     primer_length: int,
     exons: list[ExonInfo],
-) -> list[tuple[str, int, int, str]]:
+) -> list[GenomicFragment]:
     """Map a template-relative position back to genomic coordinates.
 
     A single template position may map to multiple genomic fragments
     if it spans an exon-exon junction.
 
     Returns:
-        List of (seqid, start, end, strand) fragments.
+        List of :class:`GenomicFragment`.
     """
     ordered = _exons_in_template_order(exons)
-    fragments = []
-    
+    fragments: list[GenomicFragment] = []
+
     current_template_pos = 0
     remaining_primer_len = primer_length
     primer_start_found = False
-    
+
     for exon in ordered:
         exon_len = exon.end - exon.start + 1
-        
+
         if not primer_start_found:
             if current_template_pos + exon_len > template_pos_0based:
                 # Primer starts in this exon
                 primer_start_found = True
                 offset_in_exon = template_pos_0based - current_template_pos
-                
+
                 # Length available in this first exon
                 len_in_this_exon = min(remaining_primer_len, exon_len - offset_in_exon)
-                
+
                 if exon.strand == "+":
                     g_start = exon.start + offset_in_exon
                     g_end = g_start + len_in_this_exon - 1
                 else:
                     g_end = exon.end - offset_in_exon
                     g_start = g_end - len_in_this_exon + 1
-                
-                fragments.append((exon.seqid, int(g_start), int(g_end), exon.strand))
+
+                fragments.append(GenomicFragment(seqid=exon.seqid, start=int(g_start), end=int(g_end), strand=exon.strand))
                 remaining_primer_len -= len_in_this_exon
-            
+
             current_template_pos += exon_len
         else:
             # We already found the start, are there more bits in subsequent exons?
             if remaining_primer_len <= 0:
                 break
-                
+
             len_in_this_exon = min(remaining_primer_len, exon_len)
-            
+
             if exon.strand == "+":
                 g_start = exon.start
                 g_end = g_start + len_in_this_exon - 1
             else:
                 g_end = exon.end
                 g_start = g_end - len_in_this_exon + 1
-                
-            fragments.append((exon.seqid, int(g_start), int(g_end), exon.strand))
+
+            fragments.append(GenomicFragment(seqid=exon.seqid, start=int(g_start), end=int(g_end), strand=exon.strand))
             remaining_primer_len -= len_in_this_exon
             
+    return fragments
+
+
+def genomic_range_to_fragments(
+    g_start: int, g_end: int,
+    exons: list[ExonInfo],
+) -> list[GenomicFragment]:
+    """Split a genomic coordinate range into exon-by-exon fragments.
+
+    Intersects the range ``[g_start, g_end]`` (1-based inclusive) with each
+    exon in *exons*, returning one :class:`GenomicFragment` per overlapping
+    exon.  Exons are sorted in genomic order before processing.
+    """
+    ordered = sorted(exons, key=lambda e: e.start)
+    fragments: list[GenomicFragment] = []
+    for exon in ordered:
+        o_start = max(g_start, exon.start)
+        o_end = min(g_end, exon.end)
+        if o_start <= o_end:
+            fragments.append(GenomicFragment(seqid=exon.seqid, start=o_start, end=o_end, strand=exon.strand))
     return fragments
 
 
