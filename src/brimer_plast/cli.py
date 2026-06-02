@@ -1,6 +1,7 @@
 """Brimer-PLAST command-line interface."""
 
 import hashlib
+import logging
 import os
 import subprocess
 import tempfile
@@ -12,13 +13,17 @@ import typer
 
 from brimer_plast.filter import filter_specific_pairs, run_tnblast, write_assay_file
 from brimer_plast.genome import (
+    _exons_in_template_order,
+    _reverse_complement,
     build_transcript_to_gene_map,
     build_transcriptome_fasta,
+    genomic_range_to_fragments,
     get_gene_locus,
     get_target_information,
     template_to_genomic,
 )
-from brimer_plast.models import ConservedExonChain, GeneLocus, PrimerPair
+from brimer_plast.log_config import configure_logging, get_logger
+from brimer_plast.models import ConservedExonChain, GeneLocus, GenomicFragment, PrimerPair
 from brimer_plast.pdf_report import build_pdf_report
 from brimer_plast.primer import DEFAULT_PRIMER_ARGS, design_primers
 
@@ -41,7 +46,6 @@ def calculate_md5(path: Path) -> str:
 def get_git_version() -> str:
     """Get the current git version string if available."""
     try:
-        # Check if we're in a git repo
         result = subprocess.run(
             ["git", "describe", "--always", "--dirty"],
             capture_output=True,
@@ -51,6 +55,108 @@ def get_git_version() -> str:
         return result.stdout.strip()
     except (subprocess.CalledProcessError, FileNotFoundError):
         return "0.1.0"
+
+
+def _dump_debug_info(
+    log: logging.Logger,
+    chains: list[ConservedExonChain],
+    locus: GeneLocus | None,
+    filtered_pairs: list[PrimerPair],
+    all_flat_pairs: list[PrimerPair],
+) -> None:
+    """Log detailed debug information at DEBUG level."""
+    log.debug("")
+    log.debug("=" * 70)
+    log.debug("DEBUG DUMP")
+    log.debug("=" * 70)
+
+    if locus is not None:
+        log.debug("")
+        log.debug("--- Locus ---")
+        log.debug(f"  Gene: {locus.gene_name}")
+        log.debug(f"  Seqid: {locus.seqid}")
+        log.debug(f"  Strand: {locus.strand}")
+        log.debug(f"  Genomic range: {locus.min_start:,} - {locus.max_end:,}")
+        log.debug(f"  Transcripts ({len(locus.transcripts)}):")
+        for tid, exons in sorted(locus.transcripts.items()):
+            log.debug(f"    {tid}: {len(exons)} exons")
+            for ex in exons:
+                log.debug(f"      {ex.seqid}:{ex.start:,}-{ex.end:,} ({ex.strand})")
+
+        g_min, g_max = locus.min_start, locus.max_end
+        p_coords = []
+        for p in filtered_pairs:
+            for frag in (
+                list(p.primer3_forward_fragments)
+                + list(p.primer3_reverse_fragments)
+                + list(p.tnblast_forward_fragments)
+                + list(p.tnblast_reverse_fragments)
+            ):
+                p_coords.extend([frag.start, frag.end])
+        if p_coords:
+            pmin, pmax = min(p_coords), max(p_coords)
+            pad = max(500, int((pmax - pmin) * 0.4))
+            v_min = max(g_min, pmin - pad)
+            v_max = min(g_max, pmax + pad)
+        else:
+            v_min, v_max = g_min, g_max
+        log.debug(f"  Zoom range: {v_min:,} - {v_max:,}")
+        log.debug(f"  Overview: {g_min:,} - {g_max:,}")
+
+    log.debug("")
+    log.debug("--- Conserved Exon Chains ---")
+    for chain in chains:
+        ordered = _exons_in_template_order(chain.exons)
+        log.debug(f"  Chain: {chain.id}")
+        log.debug(f"    Template length: {len(chain.template)} bp")
+        log.debug(f"    Exons ({len(ordered)}):")
+        cumulative = 1
+        for ex in ordered:
+            exon_len = ex.end - ex.start + 1
+            if ex.strand == "-":
+                coord_str = f"{ex.seqid}:{ex.end:,}-{ex.start:,} (-)"
+            else:
+                coord_str = f"{ex.seqid}:{ex.start:,}-{ex.end:,} (+)"
+            log.debug(
+                f"      {coord_str}  [{exon_len} bp,"
+                f" template {cumulative}-{cumulative + exon_len - 1}]"
+            )
+            cumulative += exon_len
+        log.debug(f"    Junction positions (1-based): {chain.junction_positions_1based}")
+        log.debug(f"    Required junction positions: {chain.required_junction_positions_1based}")
+
+    log.debug("")
+    log.debug("--- Filtered Primer Pairs ---")
+    for pair in filtered_pairs:
+        pnum = pair.pair_number or "?"
+        log.debug("")
+        log.debug(f"  Pair {pnum} (chain: {pair.chain_id})")
+        log.debug(f"    Product size: {pair.product_size}  Penalty: {pair.pair_penalty}")
+        log.debug(f"    Forward ({pair.forward_len} bp): {pair.forward_seq}")
+        log.debug(f"      Primer3 (blue): {[(f.seqid, f.start, f.end) for f in pair.primer3_forward_fragments]}")
+        log.debug(f"      tnBLAST (red):  {[(f.seqid, f.start, f.end) for f in pair.tnblast_forward_fragments]}")
+        log.debug(f"    Reverse ({pair.reverse_len} bp): {pair.reverse_seq}")
+        log.debug(f"      Primer3 (blue): {[(f.seqid, f.start, f.end) for f in pair.primer3_reverse_fragments]}")
+        log.debug(f"      tnBLAST (red):  {[(f.seqid, f.start, f.end) for f in pair.tnblast_reverse_fragments]}")
+        if pair.forward_start is not None:
+            log.debug(f"      Forward template 1-based: {pair.forward_start + 1}-{pair.forward_start + pair.forward_len}")
+        if pair.reverse_start is not None:
+            r1 = pair.reverse_start - pair.reverse_len + 2
+            r2 = pair.reverse_start + 1
+            log.debug(f"      Reverse template 1-based: {r1}-{r2}")
+
+    log.debug("")
+    log.debug("--- All Candidate Pairs (includes filtered-out) ---")
+    for i, pair in enumerate(all_flat_pairs, start=1):
+        mark = " [FILTERED IN]" if pair.pair_number is not None else ""
+        log.debug(f"  pair_{i}: {pair.forward_seq} / {pair.reverse_seq}  chain={pair.chain_id}{mark}")
+        log.debug(f"    P3 F: {pair.primer3_forward_fragments}")
+        log.debug(f"    P3 R: {pair.primer3_reverse_fragments}")
+        log.debug(f"    tn F: {pair.tnblast_forward_fragments}")
+        log.debug(f"    tn R: {pair.tnblast_reverse_fragments}")
+
+    log.debug("=" * 70)
+    log.debug("")
 
 
 @app.callback(invoke_without_command=True)
@@ -158,6 +264,14 @@ def main(
         "--tsv",
         help="Output results as tab-separated values (machine-readable).",
     ),
+    verbose: int = typer.Option(
+        0,
+        "--verbose",
+        "-v",
+        count=True,
+        help="Increase verbosity. -v for pipeline progress, -vv adds per-pair "
+        "fragment-list details and template coordinates.",
+    ),
     no_pdf: bool = typer.Option(
         False,
         "--no-pdf",
@@ -170,6 +284,9 @@ def main(
     junction (qRT-PCR mode).  Use --disable-junction-overlap for
     genomic PCR.
     """
+    configure_logging(verbose)
+    log = get_logger()
+
     # ── Validate target arguments ──────────────────────────────────────────
     if not target_gene and not target_transcript:
         typer.echo(
@@ -185,7 +302,7 @@ def main(
         raise typer.Exit(code=1)
 
     # ── Step 1: Extract conserved exon chains ──────────────────────────────
-    typer.echo("Reading genome and annotations...", err=True)
+    log.info("Reading genome and annotations...")
     try:
         chains: list[ConservedExonChain] = get_target_information(
             fasta_path=genome,
@@ -203,8 +320,6 @@ def main(
         raise typer.Exit(code=1)
 
     if not disable_junction_overlap:
-        # Drop junctionless chains (single-exon transcripts) — they can't
-        # satisfy the junction-spanning requirement.
         chains_with_junctions = [c for c in chains if c.junction_positions_1based]
         if not chains_with_junctions:
             typer.echo(
@@ -218,18 +333,17 @@ def main(
             raise typer.Exit(code=1)
         chains = chains_with_junctions
 
-    typer.echo(
-        f"  Found {len(chains)} conserved exon chain(s)", err=True
+    log.info(
+        f"  Found {len(chains)} conserved exon chain(s)"
     )
     for chain in chains:
-        typer.echo(
+        log.info(
             f"    {chain.id}: {len(chain.template)} bp template, "
-            f"{len(chain.junction_positions_1based)} junction(s)",
-            err=True,
+            f"{len(chain.junction_positions_1based)} junction(s)"
         )
 
     # ── Step 2: Design candidate primers for each chain ────────────────────
-    typer.echo("Designing primers with primer3...", err=True)
+    log.info("Designing primers with primer3...")
     global_args = {
         **DEFAULT_PRIMER_ARGS,
         "PRIMER_NUM_RETURN": num_return,
@@ -251,8 +365,6 @@ def main(
             required_junction_positions = None
         else:
             junction_positions = chain.junction_positions_1based
-            # Use required_junction_positions_1based if set (unique junctions),
-            # otherwise default to all junctions for post-filtering
             required_junction_positions = (
                 chain.required_junction_positions_1based or junction_positions
             )
@@ -265,15 +377,13 @@ def main(
             required_junction_positions=required_junction_positions,
         )
         if candidate_pairs:
-            typer.echo(
-                f"    {chain.id}: {len(candidate_pairs)} candidate pair(s)",
-                err=True,
+            log.info(
+                f"    {chain.id}: {len(candidate_pairs)} candidate pair(s)"
             )
             all_candidates.append((chain, candidate_pairs))
         else:
-            typer.echo(
-                f"    {chain.id}: no candidate primers could be designed.",
-                err=True,
+            log.warning(
+                f"    {chain.id}: no candidate primers could be designed."
             )
 
     if not all_candidates:
@@ -284,13 +394,12 @@ def main(
     flat_pairs = []
     for chain, pairs in all_candidates:
         flat_pairs.extend(pairs)
-    typer.echo(
-        f"  Total: {len(flat_pairs)} candidate pair(s) across all chains.",
-        err=True,
+    log.info(
+        f"  Total: {len(flat_pairs)} candidate pair(s) across all chains."
     )
 
     # ── Step 4: Filter with tnBLAST ────────────────────────────────────────
-    typer.echo("Running tnBLAST specificity filter...", err=True)
+    log.info("Running tnBLAST specificity filter...")
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         assay_path = os.path.join(tmp_dir, "assays.txt")
@@ -312,6 +421,7 @@ def main(
                 output_path=genome_out,
             )
             transcriptome_out = os.path.join(tmp_dir, "tntblast_transcriptome.txt")
+            log.info("  tnBLAST genome scan complete")
             run_tnblast(
                 assay_path,
                 transcriptome_path,
@@ -320,6 +430,7 @@ def main(
                 max_tm=max_tm,
                 output_path=transcriptome_out,
             )
+            log.info("  tnBLAST transcriptome scan complete")
         except (RuntimeError, FileNotFoundError) as e:
             typer.echo(f"  tnBLAST error: {e}", err=True)
             raise typer.Exit(code=1)
@@ -359,38 +470,66 @@ def main(
             junction_mode=not disable_junction_overlap,
         )
 
-        # Attach coordinates for Panel B (Sanity Check)
+        # Build chain map for exon lookup
+        chain_map = {c.id: c for c in chains}
+
+        # Compute genomic fragment lists for all pairs
         for i, pair in enumerate(flat_pairs, start=1):
             name = f"pair_{i}"
 
-            # Priority 1: Use direct genome hits (only in --disable-junction-overlap mode)
-            if name in genome_amplicons and genome_amplicons[name]:
-                hit = genome_amplicons[name][0]
-                pair.tntblast_seqid = hit.seqid
-                pair.tntblast_amplicon_start = hit.amplicon_start
-                pair.tntblast_amplicon_end = hit.amplicon_end
-            # Priority 2: Use mRNA hits mapped back to genome (works for junction mode)
-            elif name in transcriptome_amplicons and transcriptome_amplicons[name]:
-                hit = transcriptome_amplicons[name][0]  # first mRNA hit
-                tid = hit.seqid
-                if locus and tid in locus.transcripts:
-                    exons = locus.transcripts[tid]
-                    # Map mRNA range (1-based) back to genomic fragments
-                    frags_start = template_to_genomic(hit.amplicon_start - 1, 1, exons)
-                    frags_end = template_to_genomic(hit.amplicon_end - 1, 1, exons)
-                    if frags_start and frags_end:
-                        # Extract single genomic point from first fragment
-                        f_start = frags_start[0]
-                        f_end = frags_end[0]
-                        pair.tntblast_seqid = f_start[0]
-                        pair.tntblast_amplicon_start = min(f_start[1], f_end[1])
-                        pair.tntblast_amplicon_end = max(f_start[2], f_end[2])
+            # ── Primer3-derived fragments (Panel A, blue) ──
+            if pair.forward_start is not None and pair.chain_id in chain_map:
+                exons = chain_map[pair.chain_id].exons
+                pair.primer3_forward_fragments = template_to_genomic(
+                    pair.forward_start, pair.forward_len or 20, exons
+                )
+                # PRIMER_RIGHT_n returns (3' end, length) — 0-based.
+                # Convert to 5' start for template_to_genomic.
+                rev_5prime = pair.reverse_start - pair.reverse_len + 1
+                pair.primer3_reverse_fragments = template_to_genomic(
+                    rev_5prime, pair.reverse_len or 20, exons
+                )
+
+            # ── tnBLAST-derived fragments (Panel B, red) ──
+            if pair.chain_id in chain_map:
+                exons = chain_map[pair.chain_id].exons
+                f_len = pair.forward_len or 20
+                r_len = pair.reverse_len or 20
+
+                if name in genome_amplicons and genome_amplicons[name]:
+                    hit = genome_amplicons[name][0]
+                    if locus and locus.strand == "-":
+                        f_g_start = hit.amplicon_end - f_len + 1
+                        f_g_end = hit.amplicon_end
+                        r_g_start = hit.amplicon_start
+                        r_g_end = hit.amplicon_start + r_len - 1
+                    else:
+                        f_g_start = hit.amplicon_start
+                        f_g_end = hit.amplicon_start + f_len - 1
+                        r_g_start = hit.amplicon_end - r_len + 1
+                        r_g_end = hit.amplicon_end
+
+                    pair.tnblast_forward_fragments = genomic_range_to_fragments(
+                        f_g_start, f_g_end, exons
+                    )
+                    pair.tnblast_reverse_fragments = genomic_range_to_fragments(
+                        r_g_start, r_g_end, exons
+                    )
+
+                elif name in transcriptome_amplicons and transcriptome_amplicons[name]:
+                    hit = transcriptome_amplicons[name][0]
+                    pair.tnblast_forward_fragments = template_to_genomic(
+                        hit.amplicon_start, f_len, exons
+                    )
+                    pair.tnblast_reverse_fragments = template_to_genomic(
+                        hit.amplicon_end - r_len + 1, r_len, exons
+                    )
+
     if not filtered:
-        typer.echo("  No primer pairs passed tnBLAST specificity filter.", err=True)
+        log.warning("  No primer pairs passed tnBLAST specificity filter.")
     else:
-        typer.echo(
-            f"  {len(filtered)}/{len(flat_pairs)} pairs passed filtering.",
-            err=True,
+        log.info(
+            f"  {len(filtered)}/{len(flat_pairs)} pairs passed filtering."
         )
 
     # Assign pair numbers
@@ -402,31 +541,40 @@ def main(
     if filtered:
         if tsv:
             typer.echo(
-                "pair\tforward_seq\treverse_seq\tforward_tm\t"
+                "pair\tforward_seq\treverse_seq\treverse_rc\tforward_tm\t"
                 "reverse_tm\tforward_gc\treverse_gc\tproduct_size"
             )
             for i, pair in enumerate(filtered, start=1):
+                rc_rev = _reverse_complement(pair.reverse_seq or "")
                 typer.echo(
-                    f"{i}\t{pair.forward_seq}\t{pair.reverse_seq}\t"
+                    f"{i}\t{pair.forward_seq}\t{pair.reverse_seq}\t{rc_rev}\t"
                     f"{pair.forward_tm:.1f}\t{pair.reverse_tm:.1f}\t"
                     f"{pair.forward_gc:.0f}\t{pair.reverse_gc:.0f}\t"
                     f"{pair.product_size}"
                 )
         else:
             typer.echo(
-                f"{'Pair':<6} {'Forward (5→3)':<28} {'Tm(°C)':<8} {'%GC':<5} "
-                f"{'Reverse (5→3)':<28} {'Tm(°C)':<8} {'%GC':<5} {'Size':<6}"
+                f"{'Pair':<6} {'Forward':<28} {'Tm(°C)':<8} {'%GC':<5} "
+                f"{'Reverse':<28} {'Tm(°C)':<8} {'%GC':<5} {'Size':<6}"
             )
             typer.echo("-" * 100)
             for i, pair in enumerate(filtered, start=1):
+                rc_rev = _reverse_complement(pair.reverse_seq or "")
                 typer.echo(
                     f"{i:<6} {pair.forward_seq:<28} {pair.forward_tm:<8.1f} "
                     f"{pair.forward_gc:<5.0f} {pair.reverse_seq:<28} "
                     f"{pair.reverse_tm:<8.1f} {pair.reverse_gc:<5.0f} "
                     f"{pair.product_size:<6}"
                 )
+                typer.echo(
+                    f"{'':<6} {'':<28} {'':<8} {'':<5} {f'({rc_rev})':<28}"
+                )
     else:
         typer.echo("No specificity-filtered primer pairs to display.")
+
+    # ── Debug dump (independent of PDF generation) ────────────────────────
+    if verbose >= 2:
+        _dump_debug_info(log, chains, locus, filtered, flat_pairs)
 
     # ── Step 6: Generate PDF report ───────────────────────────────────────
     if not no_pdf:

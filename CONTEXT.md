@@ -49,13 +49,34 @@ _Avoid_: Transcript ID, refseq ID
 **Conserved exon chain**:
 A maximal contiguous run of exons where every adjacent pair's shared boundary
 appears in all transcripts of the gene. Each conserved chain becomes its own
-spliced template for primer design.
+spliced template for primer design. The report includes a full sequence view
+of each chain, organized by exon in 5' to 3' biological order.
 _Avoid_: Exon block, conserved run
+
+**Genomic coordinate notation**:
+Brimer-PLAST uses 1-based coordinates. In report headers and technical views,
+exons on the negative strand are notated as `high-low` (e.g., `chr1:2000-1000`)
+to reflect the 5' to 3' orientation of the transcript, while positive strand 
+exons use standard `low-high` (e.g., `chr1:1000-2000`).
+_Avoid_: 0-based coordinates, BED format
 
 **Candidate primer pair**:
 A forward and reverse primer produced by primer3, prior to specificity filtering
 by tnBLAST. These may amplify off-target regions of the genome.
 _Avoid_: Raw primers, unfiltered primers
+
+**Forward primer**:
+The primer that is identical in sequence to a segment of the mRNA (sense strand). 
+In the spliced template, it is always 5' of the reverse primer. Genomically, for 
+positive-strand genes, it has smaller coordinates than the reverse primer; for 
+negative-strand genes, it has larger coordinates.
+_Avoid_: Left primer, sense primer
+
+**Reverse primer**:
+The primer that is the reverse-complement of a segment of the mRNA. It binds to 
+the cDNA (antisense strand) during PCR. In the spliced template, it is always 
+3' of the forward primer.
+_Avoid_: Right primer, antisense primer
 
 **Specificity-filtered primer pair**:
 A candidate primer pair that survived tnBLAST's screen — i.e., no off-target
@@ -132,8 +153,17 @@ _Avoid_: TargetInfo, chain model
 
 **Primer pair model**:
 A typed data structure (``PrimerPair`` dataclass) that holds forward/reverse
-sequences, Tm, GC%, product size, and penalty for a primer pair.
+sequences, Tm, GC%, product size, penalty, and pre-computed genomic fragment
+lists for both primer3 (Panel A) and tnBLAST (Panel B) sources.
 _Avoid_: Raw dict, untyped pair
+
+**Genomic fragment**:
+A typed data structure (``GenomicFragment`` dataclass) describing a single
+contiguous region of the genome with seqid, start, end, and strand. A
+junction-spanning primer will have multiple fragments — one per exon.
+Fragments are pre-computed in the CLI and stored on ``PrimerPair`` so that
+the renderer never performs coordinate math.
+_Avoid_: Tuple, raw coordinate, (seqid, start, end, strand)
 
 **Exon info model**:
 A typed data structure (``ExonInfo`` dataclass) that holds seqid, start, end,
@@ -146,8 +176,11 @@ given gene. Used as the biological context for report visualizations.
 
 **Genome View**:
 A visualization in the PDF report showing the gene locus, coordinate axis, all 
-stacked transcripts, and designed primer binding sites. Replaces the 
+stacked transcripts, and designed primer binding sites. The coordinate axis 
+always increases from left to right (genomic order), meaning negative-strand 
+genes will appear to be oriented "backwards" (5' on the right). Replaces the 
 internal design-chain visualization.
+_Avoid_: Chromosome flip, reversed axis
 
 **Transcriptome-to-genome mapping**:
 The process of translating coordinates from a spliced mRNA sequence back to 

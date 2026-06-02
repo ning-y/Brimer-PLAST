@@ -1,9 +1,9 @@
 """PDF report generation for Brimer-PLAST.
 
-Produces an archival PDF report with:
+Produces the primary design report with:
 1. Genome-view diagram (Overview + Zoom panes)
 2. Primer pair table
-3. Run information (archival record)
+3. Technical record (full sequences and run parameters)
 
 Uses ReportLab.
 """
@@ -16,7 +16,7 @@ from datetime import datetime
 from typing import Any
 
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import letter
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import (
@@ -28,10 +28,11 @@ from reportlab.platypus import (
     Spacer,
     Table,
     TableStyle,
+    Preformatted,
 )
 
-from brimer_plast.genome import template_to_genomic
-from brimer_plast.models import ConservedExonChain, ExonInfo, GeneLocus, PrimerPair
+from brimer_plast.genome import _exons_in_template_order, _reverse_complement
+from brimer_plast.models import ConservedExonChain, ExonInfo, GeneLocus, GenomicFragment, PrimerPair
 
 # ── Colour palette ──────────────────────────────────────────────────────────
 PANEL_A_COLOR = colors.HexColor("#2166ac")  # blue — primer3
@@ -43,7 +44,7 @@ VIEWBOX_FILL = colors.Color(1, 0, 0, alpha=0.1)
 
 # ── Layout constants ────────────────────────────────────────────────────────
 MARGIN = 0.75 * inch
-PAGE_WIDTH, PAGE_HEIGHT = letter
+PAGE_WIDTH, PAGE_HEIGHT = landscape(A4)
 CONTENT_WIDTH = PAGE_WIDTH - 2 * MARGIN
 
 LEFT_MARGIN = 60  
@@ -90,7 +91,7 @@ def _draw_fragments(canvas, fragments, y, h, view_min, view_span, origin_x, draw
     drawn_xs = []
     
     for i, frag in enumerate(fragments):
-        gx1, gx2 = frag[1], frag[2]
+        gx1, gx2 = frag.start, frag.end
         x1, x2 = to_x(gx1), to_x(gx2)
         rx1, rx2 = max(origin_x, min(x1, x2)), min(origin_x + draw_w, max(x1, x2))
         
@@ -120,6 +121,7 @@ def _draw_fragments(canvas, fragments, y, h, view_min, view_span, origin_x, draw
         else:
             canvas.drawString(max_x + 3, y + h/2 - 2, label)
 
+
 def draw_gene_diagram(canvas, x, y, width, locus, filtered_pairs, chains):
     # Overall genomic range
     g_min, g_max = locus.min_start, locus.max_end
@@ -130,11 +132,12 @@ def draw_gene_diagram(canvas, x, y, width, locus, filtered_pairs, chains):
     
     def to_x_over(g): return origin_x + ((g-g_min)/g_span)*draw_w
 
-    # Determine Zoom bounds
+    # Determine Zoom bounds from all fragment lists
     p_coords = []
     for p in filtered_pairs:
-        if p.tntblast_amplicon_start:
-            p_coords.extend([p.tntblast_amplicon_start, p.tntblast_amplicon_end])
+        for frag in list(p.primer3_forward_fragments) + list(p.primer3_reverse_fragments) \
+                     + list(p.tnblast_forward_fragments) + list(p.tnblast_reverse_fragments):
+            p_coords.extend([frag.start, frag.end])
     
     if p_coords:
         pmin, pmax = min(p_coords), max(p_coords)
@@ -155,7 +158,7 @@ def draw_gene_diagram(canvas, x, y, width, locus, filtered_pairs, chains):
     over_y = y - OVERVIEW_H
     
     # Consensus Intron Line
-    _draw_intron(canvas, origin_x, origin_x + draw_w, over_y + 5, 2, locus.strand)
+    _draw_intron(canvas, origin_x, origin_x + draw_w, over_y + 5, 8, locus.strand)
     
     # Collapsed Gene Model
     all_exons = []
@@ -231,7 +234,6 @@ def draw_gene_diagram(canvas, x, y, width, locus, filtered_pairs, chains):
 
     # ── 5. Primer Plots ──────────────────────────────────────────────────────
     curr_y -= 10
-    chain_map = {c.id: c for c in chains}
     
     for pair in filtered_pairs:
         pnum = pair.pair_number or "?"
@@ -239,49 +241,43 @@ def draw_gene_diagram(canvas, x, y, width, locus, filtered_pairs, chains):
         canvas.setFillColor(colors.black)
         canvas.drawString(x, curr_y + 4, f"Pair {pnum}")
 
-        # Panel A (Blue)
-        if pair.chain_id in chain_map:
-            exons = chain_map[pair.chain_id].exons
-            
-            # Gather fragments for F and R
-            f_frags = template_to_genomic(pair.forward_start, pair.forward_len, exons) if pair.forward_start is not None else []
-            r_frags = template_to_genomic(pair.reverse_start, pair.reverse_len, exons) if pair.reverse_start is not None else []
-            
-            # Sort by genomic start to decide alignment
+        # Panel A (Blue) — pre-computed primer3 fragments
+        if pair.primer3_forward_fragments or pair.primer3_reverse_fragments:
             all_pts = []
-            if f_frags: all_pts.append((f_frags, "F", "blue"))
-            if r_frags: all_pts.append((r_frags, "R", "blue"))
-            
-            all_pts.sort(key=lambda item: item[0][0][1]) # sort by start of first fragment
-            
-            for index, (frags, label, _) in enumerate(all_pts):
-                alignment = "left" if index == 0 else "right"
-                _draw_fragments(canvas, frags, curr_y+4, 4, v_min, v_span, origin_x, draw_w, PANEL_A_COLOR, PANEL_A_FILL, f"{pnum}{label}", alignment)
+            if pair.primer3_forward_fragments:
+                all_pts.append((pair.primer3_forward_fragments, "F"))
+            if pair.primer3_reverse_fragments:
+                all_pts.append((pair.primer3_reverse_fragments, "R"))
+            all_pts.sort(key=lambda item: item[0][0].start)
 
-        # Panel B (Red)
-        if pair.tntblast_amplicon_start:
-            # We treatPanel B hits as single-segment points for the "Sanity Check"
-            # as they are re-derived from mRNA hits which already indicate validity.
-            
-            # Determine ordering for labels
-            b_items = [
-                ([("", pair.tntblast_amplicon_start, pair.tntblast_amplicon_start + (pair.forward_len or 20) - 1, "")], "F'"),
-                ([("", pair.tntblast_amplicon_end - (pair.reverse_len or 20) + 1, pair.tntblast_amplicon_end, "")], "R'")
-            ]
-            b_items.sort(key=lambda item: item[0][0][1])
-            
+            for index, (frags, label) in enumerate(all_pts):
+                alignment = "left" if index == 0 else "right"
+                _draw_fragments(canvas, frags, curr_y+4, 4, v_min, v_span, origin_x, draw_w,
+                                PANEL_A_COLOR, PANEL_A_FILL, f"{pnum}{label}", alignment)
+
+        # Panel B (Red) — pre-computed tnBLAST fragments
+        if pair.tnblast_forward_fragments or pair.tnblast_reverse_fragments:
+            b_items = []
+            if pair.tnblast_forward_fragments:
+                b_items.append((pair.tnblast_forward_fragments, "F'"))
+            if pair.tnblast_reverse_fragments:
+                b_items.append((pair.tnblast_reverse_fragments, "R'"))
+            b_items.sort(key=lambda item: item[0][0].start)
+
             for index, (frags, label) in enumerate(b_items):
                 alignment = "left" if index == 0 else "right"
-                _draw_fragments(canvas, frags, curr_y-1, 4, v_min, v_span, origin_x, draw_w, PANEL_B_COLOR, PANEL_B_FILL, f"{pnum}{label}", alignment)
+                _draw_fragments(canvas, frags, curr_y-1, 4, v_min, v_span, origin_x, draw_w,
+                                PANEL_B_COLOR, PANEL_B_FILL, f"{pnum}{label}", alignment)
 
         curr_y -= (PRIMER_ROW_H + PAIR_GAP)
 
     return curr_y - 5
 
+
 # ── Report Builder ──────────────────────────────────────────────────────────
 
 def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, target_transcript, genome_path, annotations_path, genome_md5="", annotations_md5="", version_str="0.1.0", cli_args=None):
-    doc = SimpleDocTemplate(output_path, pagesize=letter, leftMargin=MARGIN, rightMargin=MARGIN, topMargin=MARGIN, bottomMargin=MARGIN)
+    doc = SimpleDocTemplate(output_path, pagesize=landscape(A4), leftMargin=MARGIN, rightMargin=MARGIN, topMargin=MARGIN, bottomMargin=MARGIN)
     styles = getSampleStyleSheet()
     
     story = [
@@ -293,6 +289,14 @@ def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, ta
         Paragraph(f"Genome database: {os.path.basename(genome_path)}", styles["Normal"]),
         Spacer(1, 12),
         Paragraph("1. Genome-view Diagram", styles["Heading2"]),
+        Paragraph(
+            "<b>Color legend</b> — Blue: primer3-designed positions on the "
+            "conserved exon chain (Panel A). Red: tnBLAST-verified genomic "
+            "amplicon from the specificity screen, split by exon boundaries "
+            "(Panel B).",
+            styles["Normal"],
+        ),
+        Spacer(1, 4),
     ]
 
     if locus:
@@ -305,9 +309,28 @@ def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, ta
     story.append(Paragraph("2. Filtered Primer Pairs", styles["Heading2"]))
     
     if filtered_pairs:
-        data = [["Pair", "Forward (5->3)", "Tm", "GC%", "Reverse (5->3)", "Tm", "GC%", "Size"]]
+        table_cell_style = ParagraphStyle(
+            "TableCell",
+            parent=styles["Normal"],
+            fontSize=7,
+            leading=8,
+            fontName="Courier",
+        )
+        
+        data = [["Pair", "Forward", "Tm", "GC%", "Reverse", "Tm", "GC%", "Size"]]
         for p in filtered_pairs:
-            data.append([str(p.pair_number), p.forward_seq, f"{p.forward_tm:.1f}", f"{p.forward_gc:.0f}", p.reverse_seq, f"{p.reverse_tm:.1f}", f"{p.reverse_gc:.0f}", str(p.product_size)])
+            rc_rev = _reverse_complement(p.reverse_seq or "")
+            rev_p = Paragraph(f"&nbsp;{p.reverse_seq}<br/>({rc_rev})", table_cell_style)
+            data.append([
+                str(p.pair_number), 
+                Paragraph(p.forward_seq or "", table_cell_style), 
+                f"{p.forward_tm:.1f}", 
+                f"{p.forward_gc:.0f}", 
+                rev_p, 
+                f"{p.reverse_tm:.1f}", 
+                f"{p.reverse_gc:.0f}", 
+                str(p.product_size)
+            ])
         
         cw = [CONTENT_WIDTH * x for x in [0.06, 0.22, 0.08, 0.08, 0.22, 0.08, 0.08, 0.18]]
         t = Table(data, colWidths=cw)
@@ -315,6 +338,7 @@ def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, ta
             ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
             ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
             ('FONTSIZE', (0,0), (-1,-1), 7),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
             ('LEFTPADDING', (0,0), (-1,-1), 2),
             ('RIGHTPADDING', (0,0), (-1,-1), 2),
         ]))
@@ -327,7 +351,6 @@ def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, ta
     story.append(Paragraph("3. Run Information", styles["Heading2"]))
     story.append(Spacer(1, 10))
     
-    # Files table (2 columns: File, Name + MD5)
     file_data = [
         [Paragraph("<b>File type</b>", styles["Normal"]), Paragraph("<b>Location and Checksum</b>", styles["Normal"])],
         ["Genome", Paragraph(f"{os.path.basename(genome_path)}<br/>(md5: {genome_md5})", styles["Normal"])],
@@ -342,7 +365,6 @@ def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, ta
     story.append(ft)
     story.append(Spacer(1, 15))
     
-    # CLI Parameters
     if cli_args:
         story.append(Paragraph("CLI Parameters:", styles["Heading3"]))
         param_data = [["Parameter", "Value"]]
@@ -356,7 +378,6 @@ def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, ta
         ]))
         story.append(pt)
 
-    # Software versions
     story.append(Spacer(1, 15))
     story.append(Paragraph("Software Versions:", styles["Heading3"]))
     ver_lines = [
@@ -366,7 +387,130 @@ def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, ta
     for vl in ver_lines:
         story.append(Paragraph(vl, styles["Normal"]))
 
+    # ── Page 4+: Conserved Exon Chains ───────────────────────────────────────
+    if chains:
+        story.append(PageBreak())
+        story.append(Paragraph("4. Conserved Exon Chains", styles["Heading2"]))
+        story.append(Spacer(1, 10))
+        
+        for chain in chains:
+            story.append(Paragraph(f"Chain: {chain.id}", styles["Heading3"]))
+            
+            ordered_exons = _exons_in_template_order(chain.exons)
+            
+            cumulative_pos = 0
+            for i, ex in enumerate(ordered_exons, start=1):
+                exon_len = ex.end - ex.start + 1
+                
+                if ex.strand == "-":
+                    coord_str = f"{ex.seqid}:{ex.end}-{ex.start} (-)"
+                else:
+                    coord_str = f"{ex.seqid}:{ex.start}-{ex.end} (+)"
+                
+                story.append(Paragraph(f"Exon {i} ({coord_str})", styles["Heading4"]))
+                
+                exon_seq = chain.template[cumulative_pos : cumulative_pos + exon_len]
+                
+                for r in range(0, len(exon_seq), 100):
+                    row_seq = exon_seq[r : r + 100]
+                    chain_pairs = [p for p in filtered_pairs if p.chain_id == chain.id]
+                    story.append(_SequenceRow(row_seq, cumulative_pos + r + 1, chain_pairs))
+                
+                story.append(Spacer(1, 10))
+                
+                cumulative_pos += exon_len
+
     doc.build(story)
+
+
+class _SequenceRow(Flowable):
+    """Draws a single 100-base row of DNA sequence with indices and highlights."""
+    def __init__(self, sequence: str, start_index: int, pairs: list[PrimerPair]):
+        super().__init__()
+        self.sequence = sequence
+        self.start_index = start_index
+        self.pairs = pairs
+        self.line_h = 10
+        self.height = 3.5 * self.line_h
+        self.width = 600
+        
+    def wrap(self, w, h): return (self.width, self.height)
+    
+    def draw(self):
+        canv = self.canv
+        canv.setFont("Courier", 8)
+        char_w = canv.stringWidth("A", "Courier", 8)
+        
+        seq = self.sequence
+        idx = self.start_index
+        
+        f_hits: dict[int, set[int]] = {}
+        r_hits: dict[int, set[int]] = {}
+        
+        for p in self.pairs:
+            pnum = p.pair_number or 0
+            if p.forward_start is not None:
+                for pos in range(p.forward_start + 1, p.forward_start + p.forward_len + 1):
+                    f_hits.setdefault(pos, set()).add(pnum)
+            if p.reverse_start is not None:
+                for pos in range(p.reverse_start - p.reverse_len + 2, p.reverse_start + 2):
+                    r_hits.setdefault(pos, set()).add(pnum)
+
+        for i in range(len(seq)):
+            pos = idx + i
+            f_ids = f_hits.get(pos, set())
+            r_ids = r_hits.get(pos, set())
+            
+            if not f_ids and not r_ids:
+                continue
+            
+            tx = 40 + i * char_w + (i // 20) * char_w
+            
+            if f_ids:
+                canv.setFillColor(colors.Color(1, 1, 0, alpha=0.5))
+                canv.rect(tx, 0.5 * self.line_h - 2, char_w, self.line_h, fill=1, stroke=0)
+            
+            if r_ids:
+                canv.setFillColor(colors.Color(0, 1, 0, alpha=0.5))
+                canv.rect(tx, 0.5 * self.line_h - 2, char_w, self.line_h, fill=1, stroke=0)
+
+        canv.setFont("Helvetica", 4)
+        for i in range(len(seq)):
+            pos = idx + i
+            ids = sorted(f_hits.get(pos, set()) | r_hits.get(pos, set()))
+            if not ids:
+                continue
+                
+            label = ",".join(map(str, ids))
+            
+            next_pos = pos + 1
+            next_ids = sorted(f_hits.get(next_pos, set()) | r_hits.get(next_pos, set()))
+            next_label = ",".join(map(str, next_ids))
+            
+            if label != next_label:
+                tx = 40 + i * char_w + (i // 20) * char_w
+                canv.setFillColor(colors.black)
+                canv.drawString(tx + char_w - 1, 1.5 * self.line_h - 1, label)
+
+        canv.setFont("Courier", 8)
+        canv.setFillColor(colors.grey)
+        for b in range(0, len(seq), 20):
+            if b + 19 < len(seq):
+                label_val = idx + b + 19
+                tx = 40 + (b + 19) * char_w + (b // 20) * char_w
+                canv.drawRightString(tx + char_w, 2.5 * self.line_h, str(label_val))
+
+        canv.setFillColor(colors.black)
+        canv.drawRightString(35, 0.5 * self.line_h, str(idx))
+        
+        blocks = []
+        for b in range(0, len(seq), 20):
+            blocks.append(seq[b:b+20])
+        canv.drawString(40, 0.5 * self.line_h, " ".join(blocks))
+        
+        end_idx = idx + len(seq) - 1
+        canv.drawString(40 + 100 * char_w + 7 * char_w, 0.5 * self.line_h, str(end_idx))
+
 
 class _GeneDiagram(Flowable):
     def __init__(self, locus, filtered_pairs, chains, width, height):
