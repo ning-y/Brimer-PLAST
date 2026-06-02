@@ -199,7 +199,7 @@ def main(
         "Use this for genomic PCR rather than qRT-PCR.",
     ),
     num_return: int = typer.Option(
-        10,
+        50,
         "--num-return",
         "-n",
         help="Number of candidate primer pairs to design (before filtering).",

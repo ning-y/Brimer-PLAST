@@ -14,9 +14,9 @@ class TestDefaultArgs:
         assert "PRIMER_OPT_SIZE" in DEFAULT_PRIMER_ARGS
         assert "PRIMER_OPT_TM" in DEFAULT_PRIMER_ARGS
 
-    def test_default_num_return_is_10(self):
-        """Should request a reasonable number of candidate pairs."""
-        assert DEFAULT_PRIMER_ARGS["PRIMER_NUM_RETURN"] == 10
+    def test_default_num_return_is_50(self):
+        """Should request 50 candidate pairs by default for diverse forward positions."""
+        assert DEFAULT_PRIMER_ARGS["PRIMER_NUM_RETURN"] == 50
 
 
 class TestDesignPrimers:

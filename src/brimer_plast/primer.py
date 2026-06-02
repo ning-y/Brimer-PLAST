@@ -38,7 +38,7 @@ def _pair_spans_any_junction(
 # Default primer3 global args for PCR primer design.
 DEFAULT_PRIMER_ARGS: dict[str, Any] = {
     "PRIMER_PRODUCT_SIZE_RANGE": "100-400",
-    "PRIMER_NUM_RETURN": 10,
+    "PRIMER_NUM_RETURN": 50,
     "PRIMER_OPT_SIZE": 20,
     "PRIMER_MIN_SIZE": 18,
     "PRIMER_MAX_SIZE": 25,
