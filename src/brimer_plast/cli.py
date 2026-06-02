@@ -272,6 +272,13 @@ def main(
         help="Increase verbosity. -v for pipeline progress, -vv adds per-pair "
         "fragment-list details and template coordinates.",
     ),
+    output_pdf: Optional[Path] = typer.Option(
+        None,
+        "--output-pdf",
+        help="Write PDF report to this path (implies PDF generation).",
+        exists=False,
+        dir_okay=False,
+    ),
     no_pdf: bool = typer.Option(
         False,
         "--no-pdf",
@@ -297,6 +304,14 @@ def main(
     if target_gene and target_transcript:
         typer.echo(
             "Error: Provide --target-gene or --target-transcript, not both.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    # ── Validate PDF options ────────────────────────────────────────────────
+    if output_pdf and no_pdf:
+        typer.echo(
+            "Error: --output-pdf and --no-pdf are mutually exclusive.",
             err=True,
         )
         raise typer.Exit(code=1)
@@ -591,10 +606,16 @@ def main(
         _dump_debug_info(log, chains, locus, filtered, flat_pairs)
 
     # ── Step 6: Generate PDF report ───────────────────────────────────────
-    if not no_pdf:
-        gene_slug = (target_gene or target_transcript or "unknown").replace("|", "_").replace("/", "_")
-        pdf_path = f"brimer_plast_{gene_slug}_{datetime.now():%Y%m%d_%H%M%S}.pdf"
+    if no_pdf:
+        pass
+    else:
+        if output_pdf:
+            pdf_path = str(output_pdf)
+        else:
+            gene_slug = (target_gene or target_transcript or "unknown").replace("|", "_").replace("/", "_")
+            pdf_path = f"brimer_plast_{gene_slug}_{datetime.now():%Y%m%d_%H%M%S}.pdf"
         typer.echo(f"\nGenerating PDF report: {pdf_path}", err=True)
+
         try:
             genome_md5 = calculate_md5(genome)
             annotations_md5 = calculate_md5(annotations)
