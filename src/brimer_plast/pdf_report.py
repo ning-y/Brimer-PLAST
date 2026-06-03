@@ -47,6 +47,12 @@ MARGIN = 0.75 * inch
 PAGE_WIDTH, PAGE_HEIGHT = landscape(A4)
 CONTENT_WIDTH = PAGE_WIDTH - 2 * MARGIN
 
+# ReportLab's Frame adds 6pt internal padding on each side beyond the
+# user-set margins.  This is the actual space available for flowables.
+_FRAME_PAD = 12  # 6 left + 6 right, likewise top + bottom
+FRAME_W = PAGE_WIDTH - 2 * MARGIN - _FRAME_PAD
+FRAME_H = PAGE_HEIGHT - 2 * MARGIN - _FRAME_PAD
+
 LEFT_MARGIN = 60
 RIGHT_MARGIN = 60 # increased for labels on right
 DRAW_W = CONTENT_WIDTH - LEFT_MARGIN - RIGHT_MARGIN
@@ -55,9 +61,10 @@ EXON_HEIGHT = 8
 TRACK_SPACING = 3
 PRIMER_ROW_H = 14
 PAIR_GAP = 6
-# Cap how many primer pairs appear in the gene diagram to keep it on one
-# page.  The full filtered list is always shown in the table below.
-DIAGRAM_PAIR_CAP = 14
+# Upper bound on primer pairs shown per genome-view page.  The actual
+# count per page is computed dynamically from available frame height so
+# the diagram never overflows the frame.
+DIAGRAM_PAIR_CAP = 1000
 LABEL_FONT_SIZE = 6
 TICK_FONT_SIZE = 6
 TRANSCRIPT_CAP = 10
@@ -303,23 +310,47 @@ def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, ta
     ]
 
     if locus:
-        # Gene diagram draws the first N pairs; the full list appears in
-        # the table below.  Slicing here keeps both the height budget and
-        # the drawing loop in sync.
-        n_pairs = min(len(filtered_pairs), DIAGRAM_PAIR_CAP)
+        # Gene diagram draws primer pairs across multiple pages.  The
+        # number of pairs per page is computed dynamically from the
+        # available frame height so the diagram never overflows.
+        #
+        # Drawing geometry (from draw_gene_diagram trace):
+        #   base overhead = 82 + n_trans*11 pt (with "+N others" line)
+        #                  = 74 + n_trans*11 pt (without "+N others")
+        #   each pair     = 20 pt
         n_trans = min(len(locus.transcripts), TRANSCRIPT_CAP)
-        h = 130 + n_trans*11 + n_pairs*22
-        display_pairs = filtered_pairs[:DIAGRAM_PAIR_CAP]
-        story.append(_GeneDiagram(locus, display_pairs, chains, CONTENT_WIDTH, h))
-        if len(filtered_pairs) > DIAGRAM_PAIR_CAP:
+        has_others = len(locus.transcripts) > TRANSCRIPT_CAP
+        diagram_base_h = (82 if has_others else 74) + n_trans * 11
+
+        # Frame geometry: actual space inside ReportLab's frame
+        # (which adds 6pt internal padding, hence FRAME_H vs PAGE_HEIGHT).
+        # Overhead measured empirically — later pages have none.
+        PAGE1_OVERHEAD = 138  # title, date, heading, legend, spacers
+
+        def _max_pairs(overhead: float) -> int:
+            return max(1, int((FRAME_H - overhead - diagram_base_h) // 20))
+
+        first_page_pairs = _max_pairs(PAGE1_OVERHEAD)
+        later_page_pairs = _max_pairs(0)  # full frame for page 2+
+
+        total = len(filtered_pairs)
+        page_start = 0
+        page_num = 0
+        while page_start < total:
+            cap = first_page_pairs if page_num == 0 else later_page_pairs
+            page_end = min(page_start + cap, total)
+            page_pairs = filtered_pairs[page_start:page_end]
+            n_pairs_this_page = len(page_pairs)
+            h = diagram_base_h + n_pairs_this_page * 20
+
+            if page_num > 0:
+                story.append(PageBreak())
+
             story.append(
-                Paragraph(
-                    f"Note: gene diagram shows the first {DIAGRAM_PAIR_CAP} of"
-                    f" {len(filtered_pairs)} specificity-filtered primer pairs."
-                    f"  All {len(filtered_pairs)} pairs are listed below.",
-                    styles["Normal"],
-                )
+                _GeneDiagram(locus, page_pairs, chains, FRAME_W, h)
             )
+            page_start = page_end
+            page_num += 1
 
     story.append(PageBreak())
     story.append(Paragraph("2. Filtered Primer Pairs", styles["Heading2"]))
@@ -532,5 +563,10 @@ class _GeneDiagram(Flowable):
     def __init__(self, locus, filtered_pairs, chains, width, height):
         super().__init__()
         self.locus, self.filtered_pairs, self.chains, self.width, self.height = locus, filtered_pairs, chains, width, height
-    def wrap(self, w, h): return (self.width, self.height)
+    def wrap(self, w, h):
+        # Clamp to the actual available width so we never exceed the
+        # frame (which has 6pt internal padding on each side).
+        if w < self.width:
+            self.width = w
+        return (self.width, self.height)
     def draw(self): draw_gene_diagram(self.canv, 0, self.height-30, self.width, self.locus, self.filtered_pairs, self.chains)
