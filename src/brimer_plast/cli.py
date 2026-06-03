@@ -245,12 +245,12 @@ def main(
         help="Maximum primer GC content (percent).",
     ),
     product_size_min: int = typer.Option(
-        100,
+        80,
         "--product-min",
         help="Minimum PCR product size (bp).",
     ),
     product_size_max: int = typer.Option(
-        400,
+        200,
         "--product-max",
         help="Maximum PCR product size (bp).",
     ),

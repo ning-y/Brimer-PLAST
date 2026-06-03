@@ -170,6 +170,12 @@ A typed data structure (``ExonInfo`` dataclass) that holds seqid, start, end,
 and strand for a single exon parsed from GTF annotations.
 _Avoid_: Raw dict, untyped exon coordinate
 
+**Product size range**:
+The acceptable PCR amplicon length (bp) passed to primer3 as
+``PRIMER_PRODUCT_SIZE_RANGE``. Controlled via ``--product-min`` and
+``--product-max``. Defaults to 80–200 bp for qRT-PCR.
+_Avoid_: Amplicon size range, fragment length
+
 **Gene Locus**:
 The full genomic coordinates and collection of all annotated transcripts for a 
 given gene. Used as the biological context for report visualizations.
