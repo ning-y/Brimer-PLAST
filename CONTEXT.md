@@ -38,12 +38,20 @@ _Avoid_: --genomic-pcr, --no-junction
 A gene name (e.g. GAPDH) specified with ``--target-gene``. Brimer-PLAST groups
 its exons by transcript ID and identifies conserved exon-exon junctions present
 in all transcripts of that gene.
+
+Multiple targets can be specified by repeating the flag:
+``--target-gene GAPDH --target-gene ACTB``. Each target is processed as an
+independent invocation, producing its own primer set and report.
 _Avoid_: Gene name, gene symbol
 
 **Target transcript**:
 A specific transcript ID (e.g. NM_001289746.1) specified with
 ``--target-transcript``. Brimer-PLAST uses all splice junctions of that one
 transcript for the overlap requirement.
+
+Multiple targets can be specified by repeating the flag:
+``--target-transcript NM_001289746.1 --target-transcript NM_001234567.1``.
+Each target is processed as an independent invocation.
 _Avoid_: Transcript ID, refseq ID
 
 **Conserved exon chain**:

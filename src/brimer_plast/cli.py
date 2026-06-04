@@ -159,162 +159,34 @@ def _dump_debug_info(
     log.debug("")
 
 
-@app.callback(invoke_without_command=True)
-def main(
-    ctx: typer.Context,
-    genome: Path = typer.Option(
-        ...,
-        "--genome",
-        "-g",
-        exists=True,
-        dir_okay=False,
-        readable=True,
-        help="Genome FASTA file.",
-    ),
-    annotations: Path = typer.Option(
-        ...,
-        "--annotations",
-        "-a",
-        exists=True,
-        dir_okay=False,
-        readable=True,
-        help="Gene annotation GTF file.",
-    ),
-    target_gene: Optional[str] = typer.Option(
-        None,
-        "--target-gene",
-        help="Target gene name (e.g. GAPDH). One of --target-gene or "
-        "--target-transcript is required.",
-    ),
-    target_transcript: Optional[str] = typer.Option(
-        None,
-        "--target-transcript",
-        help="Target transcript ID (e.g. NM_001289746.1). One of --target-gene "
-        "or --target-transcript is required.",
-    ),
-    disable_junction_overlap: bool = typer.Option(
-        False,
-        "--disable-junction-overlap",
-        help="Allow primers that do not span an exon-exon junction. "
-        "Use this for genomic PCR rather than qRT-PCR.",
-    ),
-    num_return: int = typer.Option(
-        50,
-        "--num-return",
-        "-n",
-        help="Number of candidate primer pairs to design (before filtering).",
-    ),
-    min_tm: float = typer.Option(
-        57.0,
-        "--min-tm",
-        help="Minimum primer melting temperature.",
-    ),
-    max_tm: float = typer.Option(
-        63.0,
-        "--max-tm",
-        help="Maximum primer melting temperature.",
-    ),
-    opt_tm: float = typer.Option(
-        60.0,
-        "--opt-tm",
-        help="Optimal primer melting temperature.",
-    ),
-    min_size: int = typer.Option(
-        18,
-        "--min-size",
-        help="Minimum primer length.",
-    ),
-    max_size: int = typer.Option(
-        25,
-        "--max-size",
-        help="Maximum primer length.",
-    ),
-    opt_size: int = typer.Option(
-        20,
-        "--opt-size",
-        help="Optimal primer length.",
-    ),
-    min_gc: float = typer.Option(
-        40.0,
-        "--min-gc",
-        help="Minimum primer GC content (percent).",
-    ),
-    max_gc: float = typer.Option(
-        60.0,
-        "--max-gc",
-        help="Maximum primer GC content (percent).",
-    ),
-    product_size_min: int = typer.Option(
-        80,
-        "--product-min",
-        help="Minimum PCR product size (bp).",
-    ),
-    product_size_max: int = typer.Option(
-        200,
-        "--product-max",
-        help="Maximum PCR product size (bp).",
-    ),
-    max_amplicon: int = typer.Option(
-        2000,
-        "--max-amplicon",
-        help="Maximum tnBLAST amplicon search length.",
-    ),
-    tsv: bool = typer.Option(
-        False,
-        "--tsv",
-        help="Output results as tab-separated values (machine-readable).",
-    ),
-    verbose: int = typer.Option(
-        0,
-        "--verbose",
-        "-v",
-        count=True,
-        help="Increase verbosity. -v for pipeline progress, -vv adds per-pair "
-        "fragment-list details and template coordinates.",
-    ),
-    output_pdf: Optional[Path] = typer.Option(
-        None,
-        "--output-pdf",
-        help="Write PDF report to this path (implies PDF generation).",
-        exists=False,
-        dir_okay=False,
-    ),
-    no_pdf: bool = typer.Option(
-        False,
-        "--no-pdf",
-        help="Suppress PDF report generation.",
-    ),
+def _run_for_target(
+    *,
+    target_key: str,
+    target_type: str,  # "gene" or "transcript"
+    genome: Path,
+    annotations: Path,
+    disable_junction_overlap: bool,
+    num_return: int,
+    min_tm: float,
+    max_tm: float,
+    opt_tm: float,
+    min_size: int,
+    max_size: int,
+    opt_size: int,
+    min_gc: float,
+    max_gc: float,
+    product_size_min: int,
+    product_size_max: int,
+    max_amplicon: int,
+    tsv: bool,
+    verbose: int,
+    pdf_path: str | None,
 ) -> None:
-    """Design primers for a target and filter for specificity.
-
-    By default, at least one primer in each pair must span an exon-exon
-    junction (qRT-PCR mode).  Use --disable-junction-overlap for
-    genomic PCR.
-    """
-    configure_logging(verbose)
+    """Run the full Brimer-PLAST pipeline for a single target."""
     log = get_logger()
 
-    # ── Validate target arguments ──────────────────────────────────────────
-    if not target_gene and not target_transcript:
-        typer.echo(
-            "Error: Provide either --target-gene or --target-transcript.",
-            err=True,
-        )
-        raise typer.Exit(code=1)
-    if target_gene and target_transcript:
-        typer.echo(
-            "Error: Provide --target-gene or --target-transcript, not both.",
-            err=True,
-        )
-        raise typer.Exit(code=1)
-
-    # ── Validate PDF options ────────────────────────────────────────────────
-    if output_pdf and no_pdf:
-        typer.echo(
-            "Error: --output-pdf and --no-pdf are mutually exclusive.",
-            err=True,
-        )
-        raise typer.Exit(code=1)
+    target_gene = target_key if target_type == "gene" else None
+    target_transcript = target_key if target_type == "transcript" else None
 
     # ── Step 1: Extract conserved exon chains ──────────────────────────────
     log.info("Reading genome and annotations...")
@@ -500,8 +372,8 @@ def main(
                 pair.primer3_forward_fragments = template_to_genomic(
                     pair.forward_start, pair.forward_len or 20, exons
                 )
-                # PRIMER_RIGHT_n returns (3' end, length) — 0-based.
-                # Convert to 5' start for template_to_genomic.
+                # PRIMER_RIGHT_n returns (3\' end, length) — 0-based.
+                # Convert to 5\' start for template_to_genomic.
                 rev_5prime = pair.reverse_start - pair.reverse_len + 1
                 pair.primer3_reverse_fragments = template_to_genomic(
                     rev_5prime, pair.reverse_len or 20, exons
@@ -542,8 +414,8 @@ def main(
                 elif name in transcriptome_amplicons and transcriptome_amplicons[name]:
                     hit = transcriptome_amplicons[name][0]
                     # tnBLAST transcriptome coordinates are 0-based inclusive
-                    # in the hit transcript's coordinate space.  Map through
-                    # that specific transcript's exon set so the red marker
+                    # in the hit transcript\'s coordinate space.  Map through
+                    # that specific transcript\'s exon set so the red marker
                     # shows where tnBLAST independently found the primer.
                     tr_exons = transcript_exon_map.get(hit.seqid)
                     if tr_exons is not None:
@@ -606,14 +478,7 @@ def main(
         _dump_debug_info(log, chains, locus, filtered, flat_pairs)
 
     # ── Step 6: Generate PDF report ───────────────────────────────────────
-    if no_pdf:
-        pass
-    else:
-        if output_pdf:
-            pdf_path = str(output_pdf)
-        else:
-            gene_slug = (target_gene or target_transcript or "unknown").replace("|", "_").replace("/", "_")
-            pdf_path = f"brimer_plast_{gene_slug}_{datetime.now():%Y%m%d_%H%M%S}.pdf"
+    if pdf_path is not None:
         typer.echo(f"\nGenerating PDF report: {pdf_path}", err=True)
 
         try:
@@ -654,3 +519,233 @@ def main(
             typer.echo(f"  PDF written to {pdf_path}", err=True)
         except Exception as e:
             typer.echo(f"  PDF generation failed: {e}", err=True)
+
+
+
+@app.callback(invoke_without_command=True)
+def main(
+    ctx: typer.Context,
+    genome: Path = typer.Option(
+        ...,
+        "--genome",
+        "-g",
+        exists=True,
+        dir_okay=False,
+        readable=True,
+        help="Genome FASTA file.",
+    ),
+    annotations: Path = typer.Option(
+        ...,
+        "--annotations",
+        "-a",
+        exists=True,
+        dir_okay=False,
+        readable=True,
+        help="Gene annotation GTF file.",
+    ),
+    target_gene: Optional[list[str]] = typer.Option(
+        None,
+        "--target-gene",
+        help="Target gene name (e.g. GAPDH). Repeat for multiple targets. "
+        "One of --target-gene or --target-transcript is required.",
+    ),
+    target_transcript: Optional[list[str]] = typer.Option(
+        None,
+        "--target-transcript",
+        help="Target transcript ID (e.g. NM_001289746.1). Repeat for multiple "
+        "targets. One of --target-gene or --target-transcript is required.",
+    ),
+    disable_junction_overlap: bool = typer.Option(
+        False,
+        "--disable-junction-overlap",
+        help="Allow primers that do not span an exon-exon junction. "
+        "Use this for genomic PCR rather than qRT-PCR.",
+    ),
+    num_return: int = typer.Option(
+        50,
+        "--num-return",
+        "-n",
+        help="Number of candidate primer pairs to design (before filtering).",
+    ),
+    min_tm: float = typer.Option(
+        57.0,
+        "--min-tm",
+        help="Minimum primer melting temperature.",
+    ),
+    max_tm: float = typer.Option(
+        63.0,
+        "--max-tm",
+        help="Maximum primer melting temperature.",
+    ),
+    opt_tm: float = typer.Option(
+        60.0,
+        "--opt-tm",
+        help="Optimal primer melting temperature.",
+    ),
+    min_size: int = typer.Option(
+        18,
+        "--min-size",
+        help="Minimum primer length.",
+    ),
+    max_size: int = typer.Option(
+        25,
+        "--max-size",
+        help="Maximum primer length.",
+    ),
+    opt_size: int = typer.Option(
+        20,
+        "--opt-size",
+        help="Optimal primer length.",
+    ),
+    min_gc: float = typer.Option(
+        40.0,
+        "--min-gc",
+        help="Minimum primer GC content (percent).",
+    ),
+    max_gc: float = typer.Option(
+        60.0,
+        "--max-gc",
+        help="Maximum primer GC content (percent).",
+    ),
+    product_size_min: int = typer.Option(
+        80,
+        "--product-min",
+        help="Minimum PCR product size (bp).",
+    ),
+    product_size_max: int = typer.Option(
+        200,
+        "--product-max",
+        help="Maximum PCR product size (bp).",
+    ),
+    max_amplicon: int = typer.Option(
+        2000,
+        "--max-amplicon",
+        help="Maximum tnBLAST amplicon search length.",
+    ),
+    tsv: bool = typer.Option(
+        False,
+        "--tsv",
+        help="Output results as tab-separated values (machine-readable).",
+    ),
+    verbose: int = typer.Option(
+        0,
+        "--verbose",
+        "-v",
+        count=True,
+        help="Increase verbosity. -v for pipeline progress, -vv adds per-pair "
+        "fragment-list details and template coordinates.",
+    ),
+    output_pdf: Optional[list[Path]] = typer.Option(
+        None,
+        "--output-pdf",
+        help="Write PDF report to this path (implies PDF generation). "
+        "Repeat once per target, or omit for auto-generated names.",
+        exists=False,
+        dir_okay=False,
+    ),
+    no_pdf: bool = typer.Option(
+        False,
+        "--no-pdf",
+        help="Suppress PDF report generation.",
+    ),
+) -> None:
+    """Design primers for a target and filter for specificity.
+
+    By default, at least one primer in each pair must span an exon-exon
+    junction (qRT-PCR mode).  Use --disable-junction-overlap for
+    genomic PCR.
+    """
+    configure_logging(verbose)
+    log = get_logger()
+
+    # ── Validate target arguments ──────────────────────────────────────────
+    if not target_gene and not target_transcript:
+        typer.echo(
+            "Error: Provide either --target-gene or --target-transcript.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    if target_gene and target_transcript:
+        typer.echo(
+            "Error: Provide --target-gene or --target-transcript, not both.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    # ── Validate PDF options ────────────────────────────────────────────────
+    if output_pdf and no_pdf:
+        typer.echo(
+            "Error: --output-pdf and --no-pdf are mutually exclusive.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    # ── Determine the list of targets ──────────────────────────────────────
+    if target_gene:
+        targets: list[tuple[str, str]] = [("gene", g) for g in target_gene]
+    else:
+        targets = [("transcript", t) for t in target_transcript]
+
+    n_targets = len(targets)
+
+    if output_pdf and len(output_pdf) != n_targets:
+        typer.echo(
+            f"Error: Number of --output-pdf values ({len(output_pdf)}) must match "
+            f"the number of targets ({n_targets}).",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    # Build transcriptome once (shared across all targets)
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        transcriptome_path = os.path.join(tmp_dir, "transcriptome.fa")
+        typer.echo("  Building transcriptome from annotations...", err=True)
+        build_transcriptome_fasta(genome, annotations, transcriptome_path)
+
+        genome_md5 = calculate_md5(genome)
+        annotations_md5 = calculate_md5(annotations)
+        version_str = get_git_version()
+
+        # ── Loop over each target (independent invocation) ─────────────────
+        for idx, (target_type, target_key) in enumerate(targets):
+            typer.echo(
+                f"\n{'=' * 60}",
+            )
+            typer.echo(
+                f"  {target_type}: {target_key}  ({idx + 1} of {n_targets})",
+            )
+            typer.echo(
+                f"{'=' * 60}",
+            )
+
+            # Determine PDF path for this target
+            if no_pdf:
+                pdf_path: str | None = None
+            elif output_pdf:
+                pdf_path = str(output_pdf[idx])
+            else:
+                slug = target_key.replace("|", "_").replace("/", "_")
+                pdf_path = f"brimer_plast_{slug}_{datetime.now():%Y%m%d_%H%M%S}.pdf"
+
+            _run_for_target(
+                target_key=target_key,
+                target_type=target_type,
+                genome=genome,
+                annotations=annotations,
+                disable_junction_overlap=disable_junction_overlap,
+                num_return=num_return,
+                min_tm=min_tm,
+                max_tm=max_tm,
+                opt_tm=opt_tm,
+                min_size=min_size,
+                max_size=max_size,
+                opt_size=opt_size,
+                min_gc=min_gc,
+                max_gc=max_gc,
+                product_size_min=product_size_min,
+                product_size_max=product_size_max,
+                max_amplicon=max_amplicon,
+                tsv=tsv,
+                verbose=verbose,
+                pdf_path=pdf_path,
+            )

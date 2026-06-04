@@ -53,7 +53,7 @@ _FRAME_PAD = 12  # 6 left + 6 right, likewise top + bottom
 FRAME_W = PAGE_WIDTH - 2 * MARGIN - _FRAME_PAD
 FRAME_H = PAGE_HEIGHT - 2 * MARGIN - _FRAME_PAD
 
-LEFT_MARGIN = 60
+LEFT_MARGIN = 76
 RIGHT_MARGIN = 60 # increased for labels on right
 DRAW_W = CONTENT_WIDTH - LEFT_MARGIN - RIGHT_MARGIN
 
@@ -132,7 +132,7 @@ def _draw_fragments(canvas, fragments, y, h, view_min, view_span, origin_x, draw
             canvas.drawString(max_x + 3, y + h/2 - 2, label)
 
 
-def draw_gene_diagram(canvas, x, y, width, locus, filtered_pairs, chains):
+def draw_gene_diagram(canvas, x, y, width, locus, filtered_pairs, chains, target_transcript=None):
     # Overall genomic range
     g_min, g_max = locus.min_start, locus.max_end
     g_span = max(1, g_max - g_min)
@@ -220,8 +220,15 @@ def draw_gene_diagram(canvas, x, y, width, locus, filtered_pairs, chains):
     for tid in sorted_tids[:TRANSCRIPT_CAP]:
         exons = locus.transcripts[tid]
         canvas.setFont("Helvetica", LABEL_FONT_SIZE)
-        canvas.setFillColor(colors.black)
-        canvas.drawString(x, curr_y + 2, tid[:15])
+        is_target = target_transcript is not None and tid == target_transcript
+        if not is_target:
+            canvas.setFillColor(colors.Color(0, 0, 0, alpha=0.5))
+        else:
+            canvas.setFillColor(colors.black)
+        # Use the full transcript ID — LEFT_MARGIN (76) provides ~20 chars at
+        # font size 6 (~3.8pt/char), which covers suffixed IDs like _1, _2.
+        max_label_chars = max(10, int((LEFT_MARGIN - 4) / 3.8))
+        canvas.drawString(x, curr_y + 2, tid[:max_label_chars])
 
         for i in range(len(exons)-1):
             x1, x2 = to_x_zoom(exons[i].end), to_x_zoom(exons[i+1].start)
@@ -231,8 +238,12 @@ def draw_gene_diagram(canvas, x, y, width, locus, filtered_pairs, chains):
         for ex in exons:
             lx, rx = to_x_zoom(ex.start), to_x_zoom(ex.end)
             if lx < origin_x+draw_w and rx > origin_x:
-                canvas.setFillColor(GENE_FILL)
-                canvas.setStrokeColor(colors.black)
+                if not is_target:
+                    canvas.setFillColor(colors.Color(0.8, 0.8, 0.8, alpha=0.5))
+                    canvas.setStrokeColor(colors.Color(0, 0, 0, alpha=0.25))
+                else:
+                    canvas.setFillColor(GENE_FILL)
+                    canvas.setStrokeColor(colors.black)
                 canvas.setLineWidth(0.2)
                 canvas.rect(max(origin_x, lx), curr_y, min(origin_x+draw_w, rx)-max(origin_x, lx), EXON_HEIGHT, fill=1, stroke=1)
         curr_y -= (EXON_HEIGHT + TRACK_SPACING)
@@ -347,7 +358,7 @@ def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, ta
                 story.append(PageBreak())
 
             story.append(
-                _GeneDiagram(locus, page_pairs, chains, FRAME_W, h)
+                _GeneDiagram(locus, page_pairs, chains, FRAME_W, h, target_transcript=target_transcript)
             )
             page_start = page_end
             page_num += 1
@@ -560,13 +571,14 @@ class _SequenceRow(Flowable):
 
 
 class _GeneDiagram(Flowable):
-    def __init__(self, locus, filtered_pairs, chains, width, height):
+    def __init__(self, locus, filtered_pairs, chains, width, height, target_transcript=None):
         super().__init__()
         self.locus, self.filtered_pairs, self.chains, self.width, self.height = locus, filtered_pairs, chains, width, height
+        self.target_transcript = target_transcript
     def wrap(self, w, h):
         # Clamp to the actual available width so we never exceed the
         # frame (which has 6pt internal padding on each side).
         if w < self.width:
             self.width = w
         return (self.width, self.height)
-    def draw(self): draw_gene_diagram(self.canv, 0, self.height-30, self.width, self.locus, self.filtered_pairs, self.chains)
+    def draw(self): draw_gene_diagram(self.canv, 0, self.height-30, self.width, self.locus, self.filtered_pairs, self.chains, target_transcript=self.target_transcript)
