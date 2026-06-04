@@ -5,7 +5,6 @@ import pytest
 from brimer_plast.filter import (
     _parse_tnblast_output,
     filter_specific_pairs,
-    filter_specific_pairs_single,
     run_tnblast,
     write_assay_file,
 )
@@ -237,38 +236,3 @@ class TestFilterSpecificPairs:
         assert filter_specific_pairs([], {}, {}, target_gene="x") == []
 
 
-class TestFilterSpecificPairsSingle:
-    """Legacy single-database tests for filter_specific_pairs_single."""
-
-    def test_filters_out_off_target(self):
-        """Pairs with amplicon count != 1 should be dropped."""
-        pairs = [
-            PrimerPair(forward_seq="F1", reverse_seq="R1"),
-            PrimerPair(forward_seq="F2", reverse_seq="R2"),
-            PrimerPair(forward_seq="F3", reverse_seq="R3"),
-        ]
-        counts = {"pair_1": 1, "pair_2": 3, "pair_3": 0}
-        result = filter_specific_pairs_single(pairs, counts)
-        assert len(result) == 1
-        assert result[0] == pairs[0]
-
-    def test_all_specific(self):
-        """All pairs with exactly 1 hit should be kept."""
-        pairs = [
-            PrimerPair(forward_seq="F1", reverse_seq="R1"),
-            PrimerPair(forward_seq="F2", reverse_seq="R2"),
-        ]
-        counts = {"pair_1": 1, "pair_2": 1}
-        result = filter_specific_pairs_single(pairs, counts)
-        assert result == pairs
-
-    def test_none_specific(self):
-        """No pairs with count 1 should produce empty list."""
-        pairs = [PrimerPair(forward_seq="F1", reverse_seq="R1")]
-        counts = {"pair_1": 0}
-        result = filter_specific_pairs_single(pairs, counts)
-        assert result == []
-
-    def test_empty_inputs(self):
-        """Empty primer list and empty counts produce empty result."""
-        assert filter_specific_pairs_single([], {}) == []

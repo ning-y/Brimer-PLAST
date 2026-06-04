@@ -155,24 +155,6 @@ def filter_specific_pairs(
     return specific
 
 
-def filter_specific_pairs_single(
-    primer_pairs: list[PrimerPair],
-    assay_counts: dict[str, int],
-) -> list[PrimerPair]:
-    """Return only primer pairs that predicted exactly one amplicon.
-
-    Legacy function for single-database runs (transcriptome-only or
-    genome-only analysis).  Kept for backward-compat tests.
-    """
-    specific: list[PrimerPair] = []
-    for i, pair in enumerate(primer_pairs, start=1):
-        name = f"pair_{i}"
-        count = assay_counts.get(name, 0)
-        if count == 1:
-            specific.append(pair)
-    return specific
-
-
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 

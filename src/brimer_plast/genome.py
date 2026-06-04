@@ -290,13 +290,13 @@ def _extract_sequence_from_genome(
             f"Available sequences: {list(genome.keys())[:10]}"
         )
 
-    ordered = _exons_in_template_order(exons)
+    ordered = exons_in_template_order(exons)
 
     parts: list[str] = []
     for exon in ordered:
         fragment = genome[seqid][exon.start - 1 : exon.end].seq
         if exon.strand == "-":
-            fragment = _reverse_complement(fragment)
+            fragment = reverse_complement(fragment)
         parts.append(fragment)
 
     return "".join(parts)
@@ -425,7 +425,7 @@ def build_transcript_to_gene_map(
     return result
 
 
-def _exons_in_template_order(exons: list[ExonInfo]) -> list[ExonInfo]:
+def exons_in_template_order(exons: list[ExonInfo]) -> list[ExonInfo]:
     """Return exons sorted in the order they appear in the spliced template."""
     if not exons:
         return []
@@ -560,7 +560,7 @@ def _compute_unique_junction_positions(
     sibling_adj: set[tuple[tuple[int, int], tuple[int, int]]] = set()
     for sib in sibling_exon_lists:
         sibling_adj |= _compute_junction_adjacencies(
-            _exons_in_template_order(sib)
+            exons_in_template_order(sib)
         )
 
     unique_adj = target_adj - sibling_adj
@@ -594,7 +594,7 @@ def template_to_genomic(
     Returns:
         List of :class:`GenomicFragment`.
     """
-    ordered = _exons_in_template_order(exons)
+    ordered = exons_in_template_order(exons)
     fragments: list[GenomicFragment] = []
 
     current_template_pos = 0
@@ -732,7 +732,7 @@ def get_target_information(
                     )
                 ]
 
-            template_order_exons = _exons_in_template_order(exons)
+            template_order_exons = exons_in_template_order(exons)
             junctions = _compute_junction_positions(template_order_exons)
 
             gene_name = _find_gene_for_transcript(gtf_path, target_transcript)
@@ -777,7 +777,7 @@ def get_target_information(
                     chains = compute_conserved_exon_chains(multi_exon_lists)
                     for chain_idx, chain in enumerate(chains, start=1):
                         template = _extract_sequence_from_genome(genome, chain.exons)
-                        template_order_exons = _exons_in_template_order(chain.exons)
+                        template_order_exons = exons_in_template_order(chain.exons)
                         junctions = _compute_junction_positions(template_order_exons)
                         chain_id = f"{target_gene}_chain_{chain_idx}"
                         result.append(
@@ -792,7 +792,7 @@ def get_target_information(
                 except ValueError:
                     for tl in multi_exon_lists:
                         template = _extract_sequence_from_genome(genome, tl)
-                        template_order_exons = _exons_in_template_order(tl)
+                        template_order_exons = exons_in_template_order(tl)
                         junctions = _compute_junction_positions(template_order_exons)
                         tid = _tid_for_exons(tl)
                         result.append(
@@ -828,7 +828,7 @@ def get_target_information(
 COMPLEMENT = str.maketrans("ATCGatcg", "TAGCtagc")
 
 
-def _reverse_complement(seq: str) -> str:
+def reverse_complement(seq: str) -> str:
     return seq.translate(COMPLEMENT)[::-1]
 
 

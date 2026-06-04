@@ -85,20 +85,6 @@ class PrimerPair:
 
 
 @dataclass
-class TargetInfo:
-    """Deprecated. Replaced by :class:`ConservedExonChain`.
-
-    Identification and spliced template sequence for a target gene/transcript.
-    Kept for backward compatibility; the pipeline now returns
-    ``list[ConservedExonChain]`` from :func:`get_target_information`.
-    """
-
-    id: str
-    template: str
-    exons: list[ExonInfo] = field(default_factory=list)
-
-
-@dataclass
 class ConservedExonChain:
     """A contiguous run of exons conserved across all transcripts of a gene.
 

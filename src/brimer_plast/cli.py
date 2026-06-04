@@ -13,13 +13,13 @@ import typer
 
 from brimer_plast.filter import filter_specific_pairs, run_tnblast, write_assay_file
 from brimer_plast.genome import (
-    _exons_in_template_order,
-    _reverse_complement,
     build_transcript_to_gene_map,
     build_transcriptome_fasta,
+    exons_in_template_order,
     genomic_range_to_fragments,
     get_gene_locus,
     get_target_information,
+    reverse_complement,
     template_to_genomic,
 )
 from brimer_plast.log_config import configure_logging, get_logger
@@ -106,7 +106,7 @@ def _dump_debug_info(
     log.debug("")
     log.debug("--- Conserved Exon Chains ---")
     for chain in chains:
-        ordered = _exons_in_template_order(chain.exons)
+        ordered = exons_in_template_order(chain.exons)
         log.debug(f"  Chain: {chain.id}")
         log.debug(f"    Template length: {len(chain.template)} bp")
         log.debug(f"    Exons ({len(ordered)}):")
@@ -446,7 +446,7 @@ def _run_for_target(
                 "reverse_tm\tforward_gc\treverse_gc\tproduct_size"
             )
             for i, pair in enumerate(filtered, start=1):
-                rc_rev = _reverse_complement(pair.reverse_seq or "")
+                rc_rev = reverse_complement(pair.reverse_seq or "")
                 typer.echo(
                     f"{i}\t{pair.forward_seq}\t{pair.reverse_seq}\t{rc_rev}\t"
                     f"{pair.forward_tm:.1f}\t{pair.reverse_tm:.1f}\t"
@@ -460,7 +460,7 @@ def _run_for_target(
             )
             typer.echo("-" * 100)
             for i, pair in enumerate(filtered, start=1):
-                rc_rev = _reverse_complement(pair.reverse_seq or "")
+                rc_rev = reverse_complement(pair.reverse_seq or "")
                 typer.echo(
                     f"{i:<6} {pair.forward_seq:<28} {pair.forward_tm:<8.1f} "
                     f"{pair.forward_gc:<5.0f} {pair.reverse_seq:<28} "
@@ -696,56 +696,50 @@ def main(
         )
         raise typer.Exit(code=1)
 
-    # Build transcriptome once (shared across all targets)
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        transcriptome_path = os.path.join(tmp_dir, "transcriptome.fa")
-        typer.echo("  Building transcriptome from annotations...", err=True)
-        build_transcriptome_fasta(genome, annotations, transcriptome_path)
+    genome_md5 = calculate_md5(genome)
+    annotations_md5 = calculate_md5(annotations)
+    version_str = get_git_version()
 
-        genome_md5 = calculate_md5(genome)
-        annotations_md5 = calculate_md5(annotations)
-        version_str = get_git_version()
+    # ── Loop over each target (independent invocation) ─────────────────
+    for idx, (target_type, target_key) in enumerate(targets):
+        typer.echo(
+            f"\n{'=' * 60}",
+        )
+        typer.echo(
+            f"  {target_type}: {target_key}  ({idx + 1} of {n_targets})",
+        )
+        typer.echo(
+            f"{'=' * 60}",
+        )
 
-        # ── Loop over each target (independent invocation) ─────────────────
-        for idx, (target_type, target_key) in enumerate(targets):
-            typer.echo(
-                f"\n{'=' * 60}",
-            )
-            typer.echo(
-                f"  {target_type}: {target_key}  ({idx + 1} of {n_targets})",
-            )
-            typer.echo(
-                f"{'=' * 60}",
-            )
+        # Determine PDF path for this target
+        if no_pdf:
+            pdf_path: str | None = None
+        elif output_pdf:
+            pdf_path = str(output_pdf[idx])
+        else:
+            slug = target_key.replace("|", "_").replace("/", "_")
+            pdf_path = f"brimer_plast_{slug}_{datetime.now():%Y%m%d_%H%M%S}.pdf"
 
-            # Determine PDF path for this target
-            if no_pdf:
-                pdf_path: str | None = None
-            elif output_pdf:
-                pdf_path = str(output_pdf[idx])
-            else:
-                slug = target_key.replace("|", "_").replace("/", "_")
-                pdf_path = f"brimer_plast_{slug}_{datetime.now():%Y%m%d_%H%M%S}.pdf"
-
-            _run_for_target(
-                target_key=target_key,
-                target_type=target_type,
-                genome=genome,
-                annotations=annotations,
-                disable_junction_overlap=disable_junction_overlap,
-                num_return=num_return,
-                min_tm=min_tm,
-                max_tm=max_tm,
-                opt_tm=opt_tm,
-                min_size=min_size,
-                max_size=max_size,
-                opt_size=opt_size,
-                min_gc=min_gc,
-                max_gc=max_gc,
-                product_size_min=product_size_min,
-                product_size_max=product_size_max,
-                max_amplicon=max_amplicon,
-                tsv=tsv,
-                verbose=verbose,
-                pdf_path=pdf_path,
-            )
+        _run_for_target(
+            target_key=target_key,
+            target_type=target_type,
+            genome=genome,
+            annotations=annotations,
+            disable_junction_overlap=disable_junction_overlap,
+            num_return=num_return,
+            min_tm=min_tm,
+            max_tm=max_tm,
+            opt_tm=opt_tm,
+            min_size=min_size,
+            max_size=max_size,
+            opt_size=opt_size,
+            min_gc=min_gc,
+            max_gc=max_gc,
+            product_size_min=product_size_min,
+            product_size_max=product_size_max,
+            max_amplicon=max_amplicon,
+            tsv=tsv,
+            verbose=verbose,
+            pdf_path=pdf_path,
+        )

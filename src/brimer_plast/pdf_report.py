@@ -31,7 +31,7 @@ from reportlab.platypus import (
     Preformatted,
 )
 
-from brimer_plast.genome import _exons_in_template_order, _reverse_complement
+from brimer_plast.genome import exons_in_template_order, reverse_complement
 from brimer_plast.models import ConservedExonChain, ExonInfo, GeneLocus, GenomicFragment, PrimerPair
 
 # ── Colour palette ──────────────────────────────────────────────────────────
@@ -377,7 +377,7 @@ def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, ta
 
         data = [["Pair", "Forward", "Tm", "GC%", "Reverse", "Tm", "GC%", "Size"]]
         for p in filtered_pairs:
-            rc_rev = _reverse_complement(p.reverse_seq or "")
+            rc_rev = reverse_complement(p.reverse_seq or "")
             rev_p = Paragraph(f"&nbsp;{p.reverse_seq}<br/>({rc_rev})", table_cell_style)
             data.append([
                 str(p.pair_number),
@@ -454,7 +454,7 @@ def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, ta
         for chain in chains:
             story.append(Paragraph(f"Chain: {chain.id}", styles["Heading3"]))
 
-            ordered_exons = _exons_in_template_order(chain.exons)
+            ordered_exons = exons_in_template_order(chain.exons)
 
             cumulative_pos = 0
             for i, ex in enumerate(ordered_exons, start=1):
