@@ -23,6 +23,7 @@ brimer-plast = "brimer_plast.cli:app"
 dev = [
     "pytest >=8.0",
     "ruff >=0.5.0",
+    "pyright >=1.1.390",
 ]
 
 [tool.setuptools.packages.find]
@@ -38,3 +39,12 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N"]
+
+[tool.pyright]
+include = ["src"]
+exclude = ["**/__pycache__"]
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+reportMissingTypeStubs = false
+reportUnknownMemberType = false
+reportUnknownVariableType = false

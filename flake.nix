@@ -77,6 +77,7 @@
             pythonEnv
             tntblast
             pkgs.ruff
+            pkgs.pyright
             pkgs.python312Packages.pip
           ];
 

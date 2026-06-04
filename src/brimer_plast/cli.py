@@ -138,9 +138,9 @@ def _dump_debug_info(
         log.debug(f"    Reverse ({pair.reverse_len} bp): {pair.reverse_seq}")
         log.debug(f"      Primer3 (blue): {[(f.seqid, f.start, f.end) for f in pair.primer3_reverse_fragments]}")
         log.debug(f"      tnBLAST (red):  {[(f.seqid, f.start, f.end) for f in pair.tnblast_reverse_fragments]}")
-        if pair.forward_start is not None:
+        if pair.forward_start is not None and pair.forward_len is not None:
             log.debug(f"      Forward template 1-based: {pair.forward_start + 1}-{pair.forward_start + pair.forward_len}")
-        if pair.reverse_start is not None:
+        if pair.reverse_start is not None and pair.reverse_len is not None:
             r1 = pair.reverse_start - pair.reverse_len + 2
             r2 = pair.reverse_start + 1
             log.debug(f"      Reverse template 1-based: {r1}-{r2}")
@@ -682,9 +682,9 @@ def main(
 
     # ── Determine the list of targets ──────────────────────────────────────
     if target_gene:
-        targets: list[tuple[str, str]] = [("gene", g) for g in target_gene]
+        targets: list[tuple[str, str]] = [("gene", g) for g in (target_gene or [])]
     else:
-        targets = [("transcript", t) for t in target_transcript]
+        targets = [("transcript", t) for t in (target_transcript or [])]
 
     n_targets = len(targets)
 

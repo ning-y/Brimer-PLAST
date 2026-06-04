@@ -294,7 +294,13 @@ def _extract_sequence_from_genome(
 
     parts: list[str] = []
     for exon in ordered:
-        fragment = genome[seqid][exon.start - 1 : exon.end].seq
+        seq_record = genome[seqid]
+        if seq_record is None:
+            raise ValueError(f"Sequence {seqid!r} not found in FASTA genome.")
+        sub = seq_record[exon.start - 1 : exon.end]
+        if sub is None:
+            raise ValueError(f"Subsequence {seqid}:{exon.start}-{exon.end} not found.")
+        fragment = sub.seq
         if exon.strand == "-":
             fragment = reverse_complement(fragment)
         parts.append(fragment)

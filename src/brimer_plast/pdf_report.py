@@ -375,7 +375,7 @@ def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, ta
             fontName="Courier",
         )
 
-        data = [["Pair", "Forward", "Tm", "GC%", "Reverse", "Tm", "GC%", "Size"]]
+        data: list[list[str | Paragraph]] = [["Pair", "Forward", "Tm", "GC%", "Reverse", "Tm", "GC%", "Size"]]
         for p in filtered_pairs:
             rc_rev = reverse_complement(p.reverse_seq or "")
             rev_p = Paragraph(f"&nbsp;{p.reverse_seq}<br/>({rc_rev})", table_cell_style)
@@ -507,10 +507,10 @@ class _SequenceRow(Flowable):
 
         for p in self.pairs:
             pnum = p.pair_number or 0
-            if p.forward_start is not None:
+            if p.forward_start is not None and p.forward_len is not None:
                 for pos in range(p.forward_start + 1, p.forward_start + p.forward_len + 1):
                     f_hits.setdefault(pos, set()).add(pnum)
-            if p.reverse_start is not None:
+            if p.reverse_start is not None and p.reverse_len is not None:
                 for pos in range(p.reverse_start - p.reverse_len + 2, p.reverse_start + 2):
                     r_hits.setdefault(pos, set()).add(pnum)
 
