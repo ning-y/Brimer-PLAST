@@ -3,6 +3,7 @@
 import pytest
 
 from brimer_plast.filter import (
+    _parse_tnblast_amplicons,
     _parse_tnblast_output,
     filter_specific_pairs,
     run_tnblast,
@@ -70,6 +71,88 @@ forward primer = ...
         path.write_text("")
         result = _parse_tnblast_output(str(path))
         assert result == {}
+
+
+class TestParseTnblastAmplicons:
+    """Tests for _parse_tnblast_amplicons."""
+
+    def test_parses_single_amplicon_with_coords(self, tmp_path):
+        """A single amplicon with seqid and coordinate range."""
+        text = """name = pair_1
+amplicon range = 100 .. 300
+forward primer = ...
+
+>chrI
+"""
+        path = tmp_path / "tnt.txt"
+        path.write_text(text)
+        result = _parse_tnblast_amplicons(str(path))
+        assert "pair_1" in result
+        assert len(result["pair_1"]) == 1
+        hit = result["pair_1"][0]
+        assert hit.seqid == "chrI"
+        assert hit.amplicon_start == 100
+        assert hit.amplicon_end == 300
+
+    def test_multiple_amplicons_same_assay(self, tmp_path):
+        """Multiple amplicons for the same assay in different genomic regions."""
+        text = """name = pair_1
+amplicon range = 100 .. 200
+
+>chrI
+name = pair_1
+amplicon range = 1000 .. 1200
+
+>chrII
+name = pair_2
+amplicon range = 500 .. 600
+
+>chrI
+"""
+        path = tmp_path / "tnt_multi.txt"
+        path.write_text(text)
+        result = _parse_tnblast_amplicons(str(path))
+        assert len(result["pair_1"]) == 2
+        assert len(result["pair_2"]) == 1
+
+    def test_empty_output(self, tmp_path):
+        """Empty file yields empty dict."""
+        path = tmp_path / "empty.txt"
+        path.write_text("")
+        assert _parse_tnblast_amplicons(str(path)) == {}
+
+    def test_amplicon_range_without_seqid(self, tmp_path):
+        """Output with amplicon range but no seqid should not emit."""
+        text = """name = pair_1
+amplicon range = 100 .. 200
+forward primer = ...
+"""
+        path = tmp_path / "tnt_no_seqid.txt"
+        path.write_text(text)
+        result = _parse_tnblast_amplicons(str(path))
+        assert result == {}
+
+    def test_multiple_assays_with_results(self, tmp_path):
+        """Multiple assays each with their own amplicons."""
+        text = """name = pair_1
+amplicon range = 100 .. 200
+
+>chrI
+name = pair_1
+amplicon range = 300 .. 400
+
+>chrI
+name = pair_2
+amplicon range = 500 .. 600
+
+>chrV
+"""
+        path = tmp_path / "tnt_multi_assay.txt"
+        path.write_text(text)
+        result = _parse_tnblast_amplicons(str(path))
+        assert len(result["pair_1"]) == 2
+        assert len(result["pair_2"]) == 1
+        assert result["pair_2"][0].seqid == "chrV"
 
 
 class TestRunTnblast:

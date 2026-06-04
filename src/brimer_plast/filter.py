@@ -173,30 +173,6 @@ def _parse_tnblast_output(path: str) -> dict[str, int]:
     return counts
 
 
-def _parse_tnblast_output_verbose(path: str) -> dict[str, list[str]]:
-    """Parse tnBLAST output into assay-name -> list of target sequence IDs.
-
-    tnBLAST output lists each amplicon with:
-        name = pair_X
-        ...
-        >target_sequence_id
-        ...
-    """
-    targets: dict[str, list[str]] = {}
-    current_name: str | None = None
-    with open(path) as f:
-        for line in f:
-            if line.startswith("name = "):
-                current_name = line[len("name = ") :].strip()
-                if current_name not in targets:
-                    targets[current_name] = []
-            elif current_name is not None and line.startswith(">"):
-                tid = line[1:].strip()
-                if tid and (not targets[current_name] or targets[current_name][-1] != tid):
-                    targets[current_name].append(tid)
-    return targets
-
-
 @dataclass
 class AmpliconHit:
     """A single tnBLAST amplicon prediction with genomic coordinates."""

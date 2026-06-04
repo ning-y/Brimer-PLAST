@@ -4,11 +4,49 @@ Wraps primer3-py's ``design_primers`` function with sensible defaults
 and returns typed :class:`PrimerPair` objects.
 """
 
+from __future__ import annotations
+
 from typing import Any
 
 import primer3
 
 from brimer_plast.models import PrimerPair
+
+
+# ── Named constants (single source of truth for default values) ──────────────
+
+PRIMER_NUM_RETURN = 50
+PRIMER_OPT_SIZE = 20
+PRIMER_MIN_SIZE = 18
+PRIMER_MAX_SIZE = 25
+PRIMER_OPT_TM = 60.0
+PRIMER_MIN_TM = 57.0
+PRIMER_MAX_TM = 63.0
+PRIMER_MIN_GC = 40.0
+PRIMER_MAX_GC = 60.0
+PRIMER_PRODUCT_MIN = 80
+PRIMER_PRODUCT_MAX = 200
+
+
+# Default primer3 global args for PCR primer design.
+DEFAULT_PRIMER_ARGS: dict[str, Any] = {
+    "PRIMER_PRODUCT_SIZE_RANGE": f"{PRIMER_PRODUCT_MIN}-{PRIMER_PRODUCT_MAX}",
+    "PRIMER_NUM_RETURN": PRIMER_NUM_RETURN,
+    "PRIMER_OPT_SIZE": PRIMER_OPT_SIZE,
+    "PRIMER_MIN_SIZE": PRIMER_MIN_SIZE,
+    "PRIMER_MAX_SIZE": PRIMER_MAX_SIZE,
+    "PRIMER_OPT_TM": PRIMER_OPT_TM,
+    "PRIMER_MIN_TM": PRIMER_MIN_TM,
+    "PRIMER_MAX_TM": PRIMER_MAX_TM,
+    "PRIMER_MIN_GC": PRIMER_MIN_GC,
+    "PRIMER_MAX_GC": PRIMER_MAX_GC,
+    "PRIMER_MAX_POLY_X": 3,
+    "PRIMER_SALT_MONOVALENT": 50.0,
+    "PRIMER_SALT_DIVALENT": 1.5,
+    "PRIMER_DNTP_CONC": 0.6,
+    "PRIMER_DNA_CONC": 50.0,
+    "PRIMER_MIN_THREE_PRIME_DISTANCE": 3,
+}
 
 
 def _pair_spans_any_junction(
@@ -33,27 +71,6 @@ def _pair_spans_any_junction(
             return True
 
     return False
-
-
-# Default primer3 global args for PCR primer design.
-DEFAULT_PRIMER_ARGS: dict[str, Any] = {
-    "PRIMER_PRODUCT_SIZE_RANGE": "80-200",
-    "PRIMER_NUM_RETURN": 50,
-    "PRIMER_OPT_SIZE": 20,
-    "PRIMER_MIN_SIZE": 18,
-    "PRIMER_MAX_SIZE": 25,
-    "PRIMER_OPT_TM": 60.0,
-    "PRIMER_MIN_TM": 57.0,
-    "PRIMER_MAX_TM": 63.0,
-    "PRIMER_MIN_GC": 40.0,
-    "PRIMER_MAX_GC": 60.0,
-    "PRIMER_MAX_POLY_X": 3,
-    "PRIMER_SALT_MONOVALENT": 50.0,
-    "PRIMER_SALT_DIVALENT": 1.5,
-    "PRIMER_DNTP_CONC": 0.6,
-    "PRIMER_DNA_CONC": 50.0,
-    "PRIMER_MIN_THREE_PRIME_DISTANCE": 3,
-}
 
 
 def design_primers(

@@ -1,137 +1,139 @@
-"""GTF parsing and genome sequence extraction for Brimer-PLAST."""
+"""Conserved exon chain detection and top-level orchestration for Brimer-PLAST.
 
-import csv
-import re
+This module is the main entry point for genome-related operations.  It
+provides:
+
+* ``get_target_information`` — the primary entry point for extracting
+  conserved exon chains from a genome + annotation for a given target.
+* ``compute_conserved_exon_chains`` — conserved chain detection logic.
+* ``get_gene_locus`` — builds the full gene locus for report visualisation.
+
+Lower-level GTF parsing and sequence extraction live in ``gtf.py`` and
+``sequence.py`` respectively, but are re-exported here for backward
+compatibility.
+"""
+
 from pathlib import Path
 
 import pyfaidx
 
+from brimer_plast.gtf import (
+    _find_gene_for_transcript,
+    build_transcript_to_gene_map,
+    parse_gtf,
+    parse_gtf_all_transcripts,
+    parse_gtf_grouped_by_transcript,
+)
 from brimer_plast.models import ConservedExonChain, ExonInfo, GeneLocus, GenomicFragment
+from brimer_plast.sequence import (
+    _extract_sequence_from_genome,
+    build_transcriptome_fasta,
+    exons_in_template_order,
+    extract_sequence,
+    genomic_range_to_fragments,
+    reverse_complement,
+    template_to_genomic,
+)
+
+# ── Re-exports for backward compatibility ────────────────────────────────────
+__all__ = [
+    # from gtf
+    "build_transcript_to_gene_map",
+    "parse_gtf",
+    "parse_gtf_all_transcripts",
+    "parse_gtf_grouped_by_transcript",
+    # from sequence
+    "build_transcriptome_fasta",
+    "exons_in_template_order",
+    "extract_sequence",
+    "genomic_range_to_fragments",
+    "reverse_complement",
+    "template_to_genomic",
+    # own
+    "compute_conserved_exon_chains",
+    "get_gene_locus",
+    "get_target_information",
+]
 
 
-# ── flat parsing (backward-compat) ───────────────────────────────────────────
-
-
-def parse_gtf(
-    gtf_path: str | Path,
-    target_gene: str | None = None,
-    target_transcript: str | None = None,
-) -> list[ExonInfo]:
-    """Parse a GTF file and return exon coordinates for the target.
-
-    Exactly one of *target_gene* or *target_transcript* must be provided.
-
-    Returns a flat list of :class:`ExonInfo` objects with 1-indexed coordinates,
-    matching all exons across all transcripts (when given a gene name).
-    """
-    if target_gene and target_transcript:
-        raise ValueError("Provide either --target-gene or --target-transcript, not both.")
-    if not target_gene and not target_transcript:
-        raise ValueError("Provide either --target-gene or --target-transcript.")
-
-    exons: list[ExonInfo] = []
-
-    with open(gtf_path) as f:
-        reader = csv.reader(f, delimiter="\t")
-        for row in reader:
-            if not row or row[0].startswith("#"):
-                continue
-            if len(row) < 9:
-                continue
-            seqid, source, feature_type, start_s, end_s, _, strand, _, attr = row
-
-            if feature_type != "exon":
-                continue
-
-            start = int(start_s)
-            end = int(end_s)
-            attrs = _parse_gtf_attributes(attr)
-
-            if target_gene:
-                gene_val = attrs.get("gene_name") or attrs.get("gene") or attrs.get("gene_id")
-                if gene_val == target_gene:
-                    exons.append(ExonInfo(seqid=seqid, start=start, end=end, strand=strand))
-            elif target_transcript:
-                if attrs.get("transcript_id") == target_transcript:
-                    exons.append(ExonInfo(seqid=seqid, start=start, end=end, strand=strand))
-
-    if not exons:
-        key = target_gene or target_transcript or ""
-        raise ValueError(f"Target {key!r} not found in {gtf_path}")
-
-    return exons
-
-
-# ── transcript-grouped parsing ───────────────────────────────────────────────
-
-
-def parse_gtf_grouped_by_transcript(
-    gtf_path: str | Path,
-    target_gene: str | None = None,
-    target_transcript: str | None = None,
-) -> dict[str, list[ExonInfo]]:
-    """Parse a GTF and return exons grouped by ``transcript_id``.
-
-    Exactly one of *target_gene* or *target_transcript* must be provided.
-
-    Returns ``{transcript_id: [ExonInfo, ...], ...}``.  When given a gene
-    name, ALL transcripts of that gene are returned.  When given a transcript
-    ID, the dict contains a single entry.
-    """
-    if target_gene and target_transcript:
-        raise ValueError("Provide either --target-gene or --target-transcript, not both.")
-    if not target_gene and not target_transcript:
-        raise ValueError("Provide either --target-gene or --target-transcript.")
-
-    result: dict[str, list[ExonInfo]] = {}
-
-    with open(gtf_path) as f:
-        reader = csv.reader(f, delimiter="\t")
-        for row in reader:
-            if not row or row[0].startswith("#"):
-                continue
-            if len(row) < 9:
-                continue
-            seqid, source, feature_type, start_s, end_s, _, strand, _, attr = row
-
-            if feature_type != "exon":
-                continue
-
-            start = int(start_s)
-            end = int(end_s)
-            attrs = _parse_gtf_attributes(attr)
-            tid = attrs.get("transcript_id")
-            if not tid:
-                continue
-
-            if target_gene:
-                gene_val = attrs.get("gene_name") or attrs.get("gene") or attrs.get("gene_id")
-                if gene_val != target_gene:
-                    continue
-            elif target_transcript:
-                if tid != target_transcript:
-                    continue
-
-            result.setdefault(tid, []).append(
-                ExonInfo(seqid=seqid, start=start, end=end, strand=strand)
-            )
-
-    if not result:
-        key = target_gene or target_transcript or ""
-        raise ValueError(f"Target {key!r} not found in {gtf_path}")
-
-    for tid in result:
-        result[tid].sort(key=lambda e: e.start)
-
-    return result
-
-
-# ── conserved exon chains ────────────────────────────────────────────────────
+# ── exon key ─────────────────────────────────────────────────────────────────
 
 
 def _exon_key(exon: ExonInfo) -> tuple[int, int]:
     """Return a stable identifier for an exon: (start, end)."""
     return (exon.start, exon.end)
+
+
+# ── junction computation helpers ─────────────────────────────────────────────
+
+
+def _compute_junction_positions(exons: list[ExonInfo]) -> list[int]:
+    """Return 1-based junction positions within the template.
+
+    Assumes *exons* are already in template order.
+    """
+    if len(exons) < 2:
+        return []
+    positions: list[int] = []
+    cumulative_len = 0
+    for i in range(len(exons) - 1):
+        ex = exons[i]
+        exon_len = ex.end - ex.start + 1
+        cumulative_len += exon_len
+        positions.append(cumulative_len + 1)
+    return positions
+
+
+def _compute_junction_adjacencies(
+    exons: list[ExonInfo],
+) -> set[tuple[tuple[int, int], tuple[int, int]]]:
+    """Return the set of exon-key adjacency pairs for a list of exons.
+
+    Exons should be in template order.  Each adjacency is
+    ``((exon_i_start, exon_i_end), (exon_{i+1}_start, exon_{i+1}_end))``.
+    """
+    result: set[tuple[tuple[int, int], tuple[int, int]]] = set()
+    for i in range(len(exons) - 1):
+        result.add((_exon_key(exons[i]), _exon_key(exons[i + 1])))
+    return result
+
+
+def _compute_unique_junction_positions(
+    all_junctions: list[int],
+    target_exons: list[ExonInfo],
+    sibling_exon_lists: list[list[ExonInfo]],
+) -> list[int]:
+    """Return 1-based junction positions unique to the target transcript.
+
+    Only junctions (adjacent exon pairs that appear in the target transcript
+    but NOT in any sibling transcript) are kept.  *target_exons* must be in
+    template order.  If no unique junctions exist, returns an empty list.
+    """
+    target_adj = _compute_junction_adjacencies(target_exons)
+
+    sibling_adj: set[tuple[tuple[int, int], tuple[int, int]]] = set()
+    for sib in sibling_exon_lists:
+        sibling_adj |= _compute_junction_adjacencies(exons_in_template_order(sib))
+
+    unique_adj = target_adj - sibling_adj
+    if not unique_adj:
+        return []
+
+    # Map unique adjacencies back to 1-based template positions
+    # by walking the target exons in template order
+    result: list[int] = []
+    cumulative_len = 0
+    for i in range(len(target_exons) - 1):
+        exon_len = target_exons[i].end - target_exons[i].start + 1
+        cumulative_len += exon_len
+        adj = (_exon_key(target_exons[i]), _exon_key(target_exons[i + 1]))
+        if adj in unique_adj:
+            result.append(cumulative_len + 1)
+
+    return result
+
+
+# ── conserved exon chains ────────────────────────────────────────────────────
 
 
 def compute_conserved_exon_chains(
@@ -257,189 +259,7 @@ def compute_conserved_exon_chains(
     return chains
 
 
-# ── template extraction ──────────────────────────────────────────────────────
-
-
-def _extract_sequence_from_genome(
-    genome: pyfaidx.Fasta,
-    exons: list[ExonInfo],
-) -> str:
-    """Extract and concatenate exon sequences from an already-open FASTA handle.
-
-    Like :func:`extract_sequence` but reuses an existing ``pyfaidx.Fasta``
-    object instead of opening the file.  Designed for bulk transcriptome
-    building where opening/closing per transcript is prohibitively slow.
-
-    Raises:
-        ValueError: If exons span different chromosomes, or seqid not found.
-    """
-    if not exons:
-        return ""
-
-    seqid = exons[0].seqid
-    for exon in exons:
-        if exon.seqid != seqid:
-            raise ValueError(
-                f"Exons span different chromosomes: {exon.seqid!r} != {seqid!r}. "
-                "All exons for a target must share the same seqid."
-            )
-
-    if seqid not in genome:
-        raise ValueError(
-            f"Sequence {seqid!r} not found in FASTA genome. "
-            f"Available sequences: {list(genome.keys())[:10]}"
-        )
-
-    ordered = exons_in_template_order(exons)
-
-    parts: list[str] = []
-    for exon in ordered:
-        seq_record = genome[seqid]
-        if seq_record is None:
-            raise ValueError(f"Sequence {seqid!r} not found in FASTA genome.")
-        sub = seq_record[exon.start - 1 : exon.end]
-        if sub is None:
-            raise ValueError(f"Subsequence {seqid}:{exon.start}-{exon.end} not found.")
-        fragment = sub.seq
-        if exon.strand == "-":
-            fragment = reverse_complement(fragment)
-        parts.append(fragment)
-
-    return "".join(parts)
-
-
-def extract_sequence(
-    fasta_path: str | Path,
-    exons: list[ExonInfo],
-) -> str:
-    """Extract and concatenate exon sequences from a FASTA genome.
-
-    For exons on the negative strand, the sequence is reverse-complemented.
-    Exon coordinates are 1-indexed (GTF convention).
-
-    Raises:
-        ValueError: If exons span different chromosomes, or seqid not found.
-    """
-    if not exons:
-        return ""
-    genome = pyfaidx.Fasta(str(fasta_path), read_ahead=10_000)
-    try:
-        return _extract_sequence_from_genome(genome, exons)
-    finally:
-        genome.close()
-
-
-def parse_gtf_all_transcripts(
-    gtf_path: str | Path,
-) -> dict[str, list[ExonInfo]]:
-    """Parse a GTF and return ALL transcripts with their exon lists.
-
-    Returns ``{transcript_id: [ExonInfo, ...], ...}`` for every transcript
-    found in the GTF.  Use this for building the full transcriptome.
-    """
-    result: dict[str, list[ExonInfo]] = {}
-
-    with open(gtf_path) as f:
-        reader = csv.reader(f, delimiter="\t")
-        for row in reader:
-            if not row or row[0].startswith("#"):
-                continue
-            if len(row) < 9:
-                continue
-            seqid, source, feature_type, start_s, end_s, _, strand, _, attr = row
-
-            if feature_type != "exon":
-                continue
-
-            start = int(start_s)
-            end = int(end_s)
-            attrs = _parse_gtf_attributes(attr)
-            tid = attrs.get("transcript_id")
-            if not tid:
-                continue
-
-            result.setdefault(tid, []).append(
-                ExonInfo(seqid=seqid, start=start, end=end, strand=strand)
-            )
-
-    for tid in result:
-        result[tid].sort(key=lambda e: e.start)
-
-    return result
-
-
-def build_transcriptome_fasta(
-    fasta_path: str | Path,
-    gtf_path: str | Path,
-    output_path: str | Path,
-) -> dict[str, list[ExonInfo]]:
-    """Build a transcriptome FASTA by splicing all transcripts from GTF.
-
-    Extracts exon sequences from the genome FASTA and splices them per
-    transcript (reverse-complementing exons on the negative strand).
-    Writes a FASTA file with one entry per transcript_id.
-
-    Returns:
-        The parsed transcript-to-exon map ``{transcript_id: [ExonInfo, ...]}``
-        for all transcripts in the GTF.  Callers can use this to translate
-        tnBLAST transcriptome coordinates back to genomic positions using
-        the correct per-transcript exon list (see ``template_to_genomic``).
-    """
-    transcripts = parse_gtf_all_transcripts(gtf_path)
-    genome = pyfaidx.Fasta(str(fasta_path), read_ahead=10_000)
-    try:
-        with open(output_path, "w") as f:
-            for tid, exons in transcripts.items():
-                template = _extract_sequence_from_genome(genome, exons)
-                f.write(f">{tid}\n")
-                # Write 60-char lines for readability
-                for i in range(0, len(template), 60):
-                    f.write(template[i : i + 60] + "\n")
-    finally:
-        genome.close()
-    return transcripts
-
-
-def build_transcript_to_gene_map(
-    gtf_path: str | Path,
-) -> dict[str, str]:
-    """Build a map from transcript_id to gene_name from a GTF.
-
-    Returns ``{transcript_id: gene_name, ...}``.  Falls back to ``gene_id``
-    if ``gene_name`` attribute is absent.
-    """
-    result: dict[str, str] = {}
-
-    with open(gtf_path) as f:
-        reader = csv.reader(f, delimiter="\t")
-        for row in reader:
-            if not row or row[0].startswith("#"):
-                continue
-            if len(row) < 9:
-                continue
-            feature_type = row[2]
-            if feature_type != "exon":
-                continue
-            attrs = _parse_gtf_attributes(row[8])
-            tid = attrs.get("transcript_id")
-            if not tid or tid in result:
-                continue
-            gene = attrs.get("gene_name") or attrs.get("gene") or attrs.get("gene_id")
-            if gene:
-                result[tid] = gene
-
-    return result
-
-
-def exons_in_template_order(exons: list[ExonInfo]) -> list[ExonInfo]:
-    """Return exons sorted in the order they appear in the spliced template."""
-    if not exons:
-        return []
-    strand = exons[0].strand
-    if strand == "-":
-        return sorted(exons, key=lambda e: e.start, reverse=True)
-    else:
-        return sorted(exons, key=lambda e: e.start)
+# ── gene locus ───────────────────────────────────────────────────────────────
 
 
 def get_gene_locus(
@@ -493,181 +313,7 @@ def get_gene_locus(
     )
 
 
-def _compute_junction_positions(exons: list[ExonInfo]) -> list[int]:
-    """Return 1-based junction positions within the template.
-
-    Assumes *exons* are already in template order.
-    """
-    if len(exons) < 2:
-        return []
-    positions: list[int] = []
-    cumulative_len = 0
-    for i in range(len(exons) - 1):
-        ex = exons[i]
-        exon_len = ex.end - ex.start + 1
-        cumulative_len += exon_len
-        positions.append(cumulative_len + 1)
-    return positions
-
-
 # ── top-level entry point ────────────────────────────────────────────────────
-
-
-def _find_gene_for_transcript(
-    gtf_path: str | Path,
-    transcript_id: str,
-) -> str | None:
-    """Scan GTF to find which gene a transcript belongs to.
-
-    Returns the gene name (``gene_name``, ``gene``, or ``gene_id`` from
-    GTF attributes) or ``None`` if the transcript is not found or has no
-    gene information.
-    """
-    with open(gtf_path) as f:
-        reader = csv.reader(f, delimiter="\t")
-        for row in reader:
-            if not row or row[0].startswith("#") or len(row) < 9:
-                continue
-            if row[2] != "exon":
-                continue
-            attrs = _parse_gtf_attributes(row[8])
-            if attrs.get("transcript_id") == transcript_id:
-                return (attrs.get("gene_name") or attrs.get("gene") or attrs.get("gene_id"))
-    return None
-
-
-def _compute_junction_adjacencies(
-    exons: list[ExonInfo],
-) -> set[tuple[tuple[int, int], tuple[int, int]]]:
-    """Return the set of exon-key adjacency pairs for a list of exons.
-
-    Exons should be in template order.  Each adjacency is
-    ``((exon_i_start, exon_i_end), (exon_{i+1}_start, exon_{i+1}_end))``.
-    """
-    result: set[tuple[tuple[int, int], tuple[int, int]]] = set()
-    for i in range(len(exons) - 1):
-        result.add((_exon_key(exons[i]), _exon_key(exons[i + 1])))
-    return result
-
-
-def _compute_unique_junction_positions(
-    all_junctions: list[int],
-    target_exons: list[ExonInfo],
-    sibling_exon_lists: list[list[ExonInfo]],
-) -> list[int]:
-    """Return 1-based junction positions unique to the target transcript.
-
-    Only junctions (adjacent exon pairs that appear in the target transcript
-    but NOT in any sibling transcript) are kept.  *target_exons* must be in
-    template order.  If no unique junctions exist, returns an empty list.
-    """
-    target_adj = _compute_junction_adjacencies(target_exons)
-
-    sibling_adj: set[tuple[tuple[int, int], tuple[int, int]]] = set()
-    for sib in sibling_exon_lists:
-        sibling_adj |= _compute_junction_adjacencies(
-            exons_in_template_order(sib)
-        )
-
-    unique_adj = target_adj - sibling_adj
-    if not unique_adj:
-        return []
-
-    # Map unique adjacencies back to 1-based template positions
-    # by walking the target exons in template order
-    result: list[int] = []
-    cumulative_len = 0
-    for i in range(len(target_exons) - 1):
-        exon_len = target_exons[i].end - target_exons[i].start + 1
-        cumulative_len += exon_len
-        adj = (_exon_key(target_exons[i]), _exon_key(target_exons[i + 1]))
-        if adj in unique_adj:
-            result.append(cumulative_len + 1)
-
-    return result
-
-
-def template_to_genomic(
-    template_pos_0based: int,
-    primer_length: int,
-    exons: list[ExonInfo],
-) -> list[GenomicFragment]:
-    """Map a template-relative position back to genomic coordinates.
-
-    A single template position may map to multiple genomic fragments
-    if it spans an exon-exon junction.
-
-    Returns:
-        List of :class:`GenomicFragment`.
-    """
-    ordered = exons_in_template_order(exons)
-    fragments: list[GenomicFragment] = []
-
-    current_template_pos = 0
-    remaining_primer_len = primer_length
-    primer_start_found = False
-
-    for exon in ordered:
-        exon_len = exon.end - exon.start + 1
-
-        if not primer_start_found:
-            if current_template_pos + exon_len > template_pos_0based:
-                # Primer starts in this exon
-                primer_start_found = True
-                offset_in_exon = template_pos_0based - current_template_pos
-
-                # Length available in this first exon
-                len_in_this_exon = min(remaining_primer_len, exon_len - offset_in_exon)
-
-                if exon.strand == "+":
-                    g_start = exon.start + offset_in_exon
-                    g_end = g_start + len_in_this_exon - 1
-                else:
-                    g_end = exon.end - offset_in_exon
-                    g_start = g_end - len_in_this_exon + 1
-
-                fragments.append(GenomicFragment(seqid=exon.seqid, start=int(g_start), end=int(g_end), strand=exon.strand))
-                remaining_primer_len -= len_in_this_exon
-
-            current_template_pos += exon_len
-        else:
-            # We already found the start, are there more bits in subsequent exons?
-            if remaining_primer_len <= 0:
-                break
-
-            len_in_this_exon = min(remaining_primer_len, exon_len)
-
-            if exon.strand == "+":
-                g_start = exon.start
-                g_end = g_start + len_in_this_exon - 1
-            else:
-                g_end = exon.end
-                g_start = g_end - len_in_this_exon + 1
-
-            fragments.append(GenomicFragment(seqid=exon.seqid, start=int(g_start), end=int(g_end), strand=exon.strand))
-            remaining_primer_len -= len_in_this_exon
-            
-    return fragments
-
-
-def genomic_range_to_fragments(
-    g_start: int, g_end: int,
-    exons: list[ExonInfo],
-) -> list[GenomicFragment]:
-    """Split a genomic coordinate range into exon-by-exon fragments.
-
-    Intersects the range ``[g_start, g_end]`` (1-based inclusive) with each
-    exon in *exons*, returning one :class:`GenomicFragment` per overlapping
-    exon.  Exons are sorted in genomic order before processing.
-    """
-    ordered = sorted(exons, key=lambda e: e.start)
-    fragments: list[GenomicFragment] = []
-    for exon in ordered:
-        o_start = max(g_start, exon.start)
-        o_end = min(g_end, exon.end)
-        if o_start <= o_end:
-            fragments.append(GenomicFragment(seqid=exon.seqid, start=o_start, end=o_end, strand=exon.strand))
-    return fragments
 
 
 def get_target_information(
@@ -769,12 +415,8 @@ def get_target_information(
                 )
             ]
         else:
-            multi_exon_lists = [
-                tl for tl in transcript_exon_lists if len(tl) >= 2
-            ]
-            single_exon_lists = [
-                tl for tl in transcript_exon_lists if len(tl) < 2
-            ]
+            multi_exon_lists = [tl for tl in transcript_exon_lists if len(tl) >= 2]
+            single_exon_lists = [tl for tl in transcript_exon_lists if len(tl) < 2]
 
             result: list[ConservedExonChain] = []
 
@@ -827,25 +469,3 @@ def get_target_information(
             return result
     finally:
         genome.close()
-
-
-# ── helpers ──────────────────────────────────────────────────────────────────
-
-COMPLEMENT = str.maketrans("ATCGatcg", "TAGCtagc")
-
-
-def reverse_complement(seq: str) -> str:
-    return seq.translate(COMPLEMENT)[::-1]
-
-
-_GTF_ATTR_RE = re.compile(r'(\S+)\s+"([^"]*)"')
-
-
-def _parse_gtf_attributes(attr: str) -> dict[str, str]:
-    """Parse the GTF attributes column into a key-value dict."""
-    result: dict[str, str] = {}
-    for match in _GTF_ATTR_RE.finditer(attr):
-        key = match.group(1)
-        value = match.group(2)
-        result[key] = value
-    return result

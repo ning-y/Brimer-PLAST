@@ -505,3 +505,122 @@ class TestConservedChainTemplates:
                     f"Junction between exon {i+1} and {i+2} "
                     f"(1-based pos {expected_1based}) not in positions list"
                 )
+
+
+# ── _compute_junction_positions ──────────────────────────────────────────────
+
+
+class TestComputeJunctionPositions:
+    """Tests for the private _compute_junction_positions helper."""
+
+    def test_two_exons(self):
+        """Two exons of equal length produce one junction in the middle."""
+        from brimer_plast.genome import _compute_junction_positions
+
+        exons = [ExonInfo("chrI", 100, 299, "+"), ExonInfo("chrI", 400, 599, "+")]
+        # Template order: + strand, so 100-299 then 400-599.
+        # Exon1_len = 200, junction at 201 (1-based)
+        result = _compute_junction_positions(exons)
+        assert result == [201]
+
+    def test_three_exons(self):
+        """Three exons produce two junctions."""
+        from brimer_plast.genome import _compute_junction_positions
+
+        exons = [
+            ExonInfo("chrI", 100, 199, "+"),
+            ExonInfo("chrI", 300, 399, "+"),
+            ExonInfo("chrI", 500, 599, "+"),
+        ]
+        # Exon1=100bp, junction at 101. Exon2=100bp, junction at 201.
+        result = _compute_junction_positions(exons)
+        assert result == [101, 201]
+
+    def test_unequal_exon_lengths(self):
+        """Junction positions are correct for unequal exon lengths."""
+        from brimer_plast.genome import _compute_junction_positions
+
+        exons = [ExonInfo("chrI", 100, 349, "+"), ExonInfo("chrI", 450, 599, "+")]
+        # Exon1_len = 250, junction at 251
+        result = _compute_junction_positions(exons)
+        assert result == [251]
+
+    def test_single_exon_returns_empty(self):
+        """Single exon has no junctions."""
+        from brimer_plast.genome import _compute_junction_positions
+
+        exons = [ExonInfo("chrI", 100, 200, "+")]
+        assert _compute_junction_positions(exons) == []
+
+    def test_empty_exons_returns_empty(self):
+        """Empty list returns empty."""
+        from brimer_plast.genome import _compute_junction_positions
+
+        assert _compute_junction_positions([]) == []
+
+    def test_negative_strand_uses_template_order(self):
+        """Negative-strand exons use template order (reversed)."""
+        from brimer_plast.genome import _compute_junction_positions
+
+        # Template order for negative strand: 500-599 first, then 300-399
+        exons = [ExonInfo("chrI", 300, 399, "-"), ExonInfo("chrI", 500, 599, "-")]
+        # The function takes exons already in template order.
+        result = _compute_junction_positions(exons)
+        # Exon1_len = 100 (500-599), junction at 101
+        assert result == [101]
+
+
+# ── get_gene_locus ───────────────────────────────────────────────────────────
+
+
+class TestGetGeneLocus:
+    """Tests for get_gene_locus."""
+
+    def test_returns_locus_for_gene_name(self, mini_genome_gtf):
+        """Should return a GeneLocus for a known gene."""
+        from brimer_plast.genome import get_gene_locus
+
+        locus = get_gene_locus(mini_genome_gtf, target_gene="test_gene")
+        assert locus is not None
+        assert locus.gene_name == "test_gene"
+        assert locus.seqid == "chrI"
+        assert locus.strand == "+"
+        assert locus.min_start == 101
+        assert locus.max_end == 600
+
+    def test_returns_locus_for_transcript(self, mini_genome_gtf):
+        """Should resolve transcript to its gene locus."""
+        from brimer_plast.genome import get_gene_locus
+
+        locus = get_gene_locus(mini_genome_gtf, target_transcript="test_transcript")
+        assert locus is not None
+        assert locus.gene_name == "test_gene"
+        assert "test_transcript" in locus.transcripts
+
+    def test_raises_for_missing_gene(self, mini_genome_gtf):
+        """Non-existent gene raises ValueError (consistent with parse_gtf)."""
+        from brimer_plast.genome import get_gene_locus
+
+        with pytest.raises(ValueError, match="not found"):
+            get_gene_locus(mini_genome_gtf, target_gene="nonexistent")
+
+    def test_multi_transcript_locus_cover_full_range(self, multi_genome_gtf):
+        """Locus range should span the full gene."""
+        from brimer_plast.genome import get_gene_locus
+
+        locus = get_gene_locus(multi_genome_gtf, target_gene="multi_test_gene")
+        assert locus is not None
+        assert locus.min_start == 101
+        assert locus.max_end == 1000
+
+    def test_deduplicates_identical_transcripts(self, multi_genome_gtf):
+        """Transcripts with identical exon structure are deduplicated."""
+        from brimer_plast.genome import get_gene_locus
+
+        locus = get_gene_locus(multi_genome_gtf, target_gene="multi_test_gene")
+        # transcript_A and transcript_C have identical exon structure
+        # Only one of them should appear in unique_transcripts.
+        # Transcript B has a different structure, so total = 2 unique.
+        assert len(locus.transcripts) == 2, (
+            f"Expected 2 unique transcript structures, got {len(locus.transcripts)}"
+        )
