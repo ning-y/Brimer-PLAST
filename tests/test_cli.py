@@ -143,6 +143,26 @@ class TestRequiredArgs:
         assert result.exit_code != 0
         assert "mutually exclusive" in result.stdout.lower()
 
+    def test_output_pdf_count_mismatch(self, mini_genome_fasta, mini_genome_gtf):
+        """Two targets but one --output-pdf should error."""
+        result = runner.invoke(
+            app,
+            [
+                "--genome",
+                mini_genome_fasta,
+                "--annotations",
+                mini_genome_gtf,
+                "--target-gene",
+                "test_gene",
+                "--target-gene",
+                "test_gene",
+                "--output-pdf",
+                "/tmp/report.pdf",
+            ],
+        )
+        assert result.exit_code != 0
+        assert "must match" in result.stdout.lower()
+
 
 class TestEndToEnd:
     def test_produces_primer_set_disabled_junction(
@@ -232,6 +252,67 @@ class TestEndToEnd:
         )
         assert result.exit_code != 0
 
+    def test_multiple_target_genes_produces_section_headers(
+        self, mini_genome_fasta, mini_genome_gtf, tmp_path
+    ):
+        """Two identical target-gene values should produce two section headers."""
+        pdf1 = tmp_path / "r1.pdf"
+        pdf2 = tmp_path / "r2.pdf"
+        result = runner.invoke(
+            app,
+            [
+                "--genome",
+                mini_genome_fasta,
+                "--annotations",
+                mini_genome_gtf,
+                "--target-gene",
+                "test_gene",
+                "--target-gene",
+                "test_gene",
+                "--num-return",
+                "3",
+                "--disable-junction-overlap",
+                "--output-pdf",
+                str(pdf1),
+                "--output-pdf",
+                str(pdf2),
+            ],
+        )
+        assert result.exit_code == 0, f"cli failed: {result.stdout}"
+        assert "gene: test_gene" in result.stdout
+        # Should appear twice (once per target)
+        assert result.stdout.count("gene: test_gene") == 2
+
+    def test_multiple_target_transcripts_produces_two_sections(
+        self, mini_genome_fasta, mini_genome_gtf, tmp_path
+    ):
+        """Two target-transcript values should produce two section headers and two PDFs."""
+        pdf1 = tmp_path / "tr1.pdf"
+        pdf2 = tmp_path / "tr2.pdf"
+        result = runner.invoke(
+            app,
+            [
+                "--genome",
+                mini_genome_fasta,
+                "--annotations",
+                mini_genome_gtf,
+                "--target-transcript",
+                "test_transcript",
+                "--target-transcript",
+                "test_transcript",
+                "--num-return",
+                "3",
+                "--disable-junction-overlap",
+                "--output-pdf",
+                str(pdf1),
+                "--output-pdf",
+                str(pdf2),
+            ],
+        )
+        assert result.exit_code == 0, f"cli failed: {result.stdout}"
+        assert "of 2)" in result.stdout
+        assert result.stdout.count("transcript: test_transcript") == 2
+
     def test_tsv_flag_produces_tab_separated_output(
         self, mini_genome_fasta, mini_genome_gtf, tmp_path
     ):
@@ -303,5 +384,34 @@ class TestEndToEnd:
                 "3",
             ],
         )
+        assert result.exit_code != 0
+        assert "disable-junction-overlap" in result.stdout.lower()
+
+    def test_single_exon_fails_multi_target(
+        self, mini_genome_fasta, single_exon_gtf, tmp_path
+    ):
+        """Multiple targets where one has single-exon genes all fail."""
+        pdf1 = tmp_path / "r1.pdf"
+        pdf2 = tmp_path / "r2.pdf"
+        result = runner.invoke(
+            app,
+            [
+                "--genome",
+                mini_genome_fasta,
+                "--annotations",
+                single_exon_gtf,
+                "--target-gene",
+                "single_exon_gene",
+                "--target-gene",
+                "single_exon_gene",
+                "--num-return",
+                "3",
+                "--output-pdf",
+                str(pdf1),
+                "--output-pdf",
+                str(pdf2),
+            ],
+        )
+        # First target fails -> exit
         assert result.exit_code != 0
         assert "disable-junction-overlap" in result.stdout.lower()
