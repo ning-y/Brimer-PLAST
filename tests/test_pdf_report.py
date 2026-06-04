@@ -21,11 +21,13 @@ from brimer_plast.models import (
     GenomicFragment,
     PrimerPair,
 )
-from brimer_plast.pdf_report import (
+from brimer_plast.diagram import (
     DIAGRAM_PAIR_CAP,
-    FRAME_H,
     TRANSCRIPT_CAP,
     _GeneDiagram,
+)
+from brimer_plast.pdf_report import (
+    FRAME_H,
 )
 
 

@@ -13,9 +13,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from brimer_plast.filter import (
+from brimer_plast.filter import filter_specific_pairs
+from brimer_plast.tnblast import (
     _parse_tnblast_amplicons,
-    filter_specific_pairs,
     run_tnblast,
     write_assay_file,
 )
@@ -227,12 +227,16 @@ def run_pipeline(
         for i, pair in enumerate(flat_pairs, start=1):
             name = f"pair_{i}"
 
-            if pair.forward_start is not None and pair.chain_id in chain_map:
+            if (
+                pair.forward_start is not None
+                and pair.reverse_start is not None
+                and pair.chain_id in chain_map
+            ):
                 exons = chain_map[pair.chain_id].exons
                 pair.primer3_forward_fragments = template_to_genomic(
                     pair.forward_start, pair.forward_len or 20, exons
                 )
-                rev_5prime = pair.reverse_start - pair.reverse_len + 1
+                rev_5prime = pair.reverse_start - (pair.reverse_len or 20) + 1
                 pair.primer3_reverse_fragments = template_to_genomic(
                     rev_5prime, pair.reverse_len or 20, exons
                 )

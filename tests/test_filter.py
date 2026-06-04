@@ -2,10 +2,10 @@
 
 import pytest
 
-from brimer_plast.filter import (
+from brimer_plast.filter import filter_specific_pairs
+from brimer_plast.tnblast import (
     _parse_tnblast_amplicons,
     _parse_tnblast_output,
-    filter_specific_pairs,
     run_tnblast,
     write_assay_file,
 )
