@@ -12,6 +12,21 @@ This project is developed from scratch.
 
 Core project dependencies are provided by `flake.nix` at the project root. Use `nix develop --command <cmd>` to run commands inside the dev shell.
 
+**Always run `pytest` and `python` through `nix develop --command`.** The `primer3-py` C-extension and `tntblast` binary are only available inside the nix shell. Do not invoke `.venv/bin/python` or `.venv/bin/pytest` directly — the `.venv/` directory is created by the nix `shellHook` and has `--system-site-packages` enabled; it is broken outside `nix develop`.
+
+Common commands:
+
+```bash
+# Run all tests (includes C. elegans integration, ~2 minutes)
+nix develop --command timeout 240 pytest tests/
+
+# Run a single test file
+nix develop --command pytest tests/test_pipeline.py -v
+
+# Run a single test class or method
+nix develop --command pytest tests/test_pipeline.py::TestPipelineResult -v
+```
+
 Conda/mamba and its related tools are never allowed.
 
 ## Production packaging

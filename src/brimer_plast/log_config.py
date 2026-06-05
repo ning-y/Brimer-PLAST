@@ -9,6 +9,8 @@ Level scheme:
 * ``-vv`` (DEBUG): per-pair data (fragment lists, template coordinates)
 """
 
+from __future__ import annotations
+
 import logging
 import sys
 

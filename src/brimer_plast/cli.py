@@ -1,17 +1,16 @@
 """Brimer-PLAST command-line interface."""
 
+from __future__ import annotations
+
 import hashlib
-import logging
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 import typer
 
 from brimer_plast.genome import reverse_complement
 from brimer_plast.log_config import configure_logging, get_logger
-from brimer_plast.models import ConservedExonChain, GeneLocus, PrimerPair
 from brimer_plast.pdf_report import build_pdf_report
 from brimer_plast.pipeline import PipelineResult, dump_debug_info, run_pipeline
 from brimer_plast.primer import (
@@ -57,25 +56,6 @@ def get_git_version() -> str:
         return result.stdout.strip()
     except (subprocess.CalledProcessError, FileNotFoundError):
         return "0.1.0"
-
-
-def _dump_debug_info(
-    log: logging.Logger,
-    chains: list[ConservedExonChain],
-    locus: GeneLocus | None,
-    filtered_pairs: list[PrimerPair],
-    all_flat_pairs: list[PrimerPair],
-) -> None:
-    """Legacy wrapper — delegates to pipeline.dump_debug_info."""
-    from brimer_plast.pipeline import PipelineResult, dump_debug_info
-
-    result = PipelineResult(
-        chains=chains,
-        locus=locus,
-        filtered_pairs=filtered_pairs,
-        all_candidates=all_flat_pairs,
-    )
-    dump_debug_info(result, log=log)
 
 
 def _run_for_target(
@@ -250,13 +230,13 @@ def main(
         readable=True,
         help="Gene annotation GTF file.",
     ),
-    target_gene: Optional[list[str]] = typer.Option(
+    target_gene: list[str] | None = typer.Option(
         None,
         "--target-gene",
         help="Target gene name (e.g. GAPDH). Repeat for multiple targets. "
         "One of --target-gene or --target-transcript is required.",
     ),
-    target_transcript: Optional[list[str]] = typer.Option(
+    target_transcript: list[str] | None = typer.Option(
         None,
         "--target-transcript",
         help="Target transcript ID (e.g. NM_001289746.1). Repeat for multiple "
@@ -342,7 +322,7 @@ def main(
         help="Increase verbosity. -v for pipeline progress, -vv adds per-pair "
         "fragment-list details and template coordinates.",
     ),
-    output_pdf: Optional[list[Path]] = typer.Option(
+    output_pdf: list[Path] | None = typer.Option(
         None,
         "--output-pdf",
         help="Write PDF report to this path (implies PDF generation). "

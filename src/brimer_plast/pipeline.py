@@ -14,11 +14,8 @@ from pathlib import Path
 from typing import Any
 
 from brimer_plast.filter import filter_specific_pairs
-from brimer_plast.tnblast import (
-    _parse_tnblast_amplicons,
-    run_tnblast,
-    write_assay_file,
-)
+from brimer_plast.primer import design_primers
+from brimer_plast.tnblast import AmpliconHit, _parse_tnblast_amplicons, run_tnblast, write_assay_file
 from brimer_plast.genome import (
     build_transcript_to_gene_map,
     build_transcriptome_fasta,
@@ -50,6 +47,58 @@ class PipelineResult:
     def has_results(self) -> bool:
         """Whether any filtered pairs survived tnBLAST screening."""
         return len(self.filtered_pairs) > 0
+
+
+# ── helper: tnBLAST fragment builder ───────────────────────────────────────
+
+
+def _compute_tnblast_fragments(
+    pair: PrimerPair,
+    name: str,
+    exons: list[ExonInfo],
+    locus: GeneLocus | None,
+    genome_amplicons: dict[str, list[AmpliconHit]],
+    transcriptome_amplicons: dict[str, list[AmpliconHit]],
+    transcript_exon_map: dict[str, list[ExonInfo]],
+) -> None:
+    """Populate tnBLAST-derived fragment lists on a PrimerPair.
+
+    Uses the first hit from genome amplicons if available (preferred),
+    otherwise falls back to transcriptome amplicons.
+    """
+    f_len = pair.forward_len or 20
+    r_len = pair.reverse_len or 20
+
+    if name in genome_amplicons and genome_amplicons[name]:
+        hit = genome_amplicons[name][0]
+        if locus and locus.strand == "-":
+            f_g_start = hit.amplicon_end - f_len + 2
+            f_g_end = hit.amplicon_end + 1
+            r_g_start = hit.amplicon_start + 1
+            r_g_end = hit.amplicon_start + r_len
+        else:
+            f_g_start = hit.amplicon_start + 1
+            f_g_end = hit.amplicon_start + f_len
+            r_g_start = hit.amplicon_end - r_len + 2
+            r_g_end = hit.amplicon_end + 1
+
+        pair.tnblast_forward_fragments = genomic_range_to_fragments(
+            f_g_start, f_g_end, exons
+        )
+        pair.tnblast_reverse_fragments = genomic_range_to_fragments(
+            r_g_start, r_g_end, exons
+        )
+
+    elif name in transcriptome_amplicons and transcriptome_amplicons[name]:
+        hit = transcriptome_amplicons[name][0]
+        tr_exons = transcript_exon_map.get(hit.seqid)
+        if tr_exons is not None:
+            pair.tnblast_forward_fragments = template_to_genomic(
+                hit.amplicon_start, f_len, tr_exons
+            )
+            pair.tnblast_reverse_fragments = template_to_genomic(
+                hit.amplicon_end - r_len + 1, r_len, tr_exons
+            )
 
 
 def run_pipeline(
@@ -243,39 +292,10 @@ def run_pipeline(
 
             if pair.chain_id in chain_map:
                 exons = chain_map[pair.chain_id].exons
-                f_len = pair.forward_len or 20
-                r_len = pair.reverse_len or 20
-
-                if name in genome_amplicons and genome_amplicons[name]:
-                    hit = genome_amplicons[name][0]
-                    if locus and locus.strand == "-":
-                        f_g_start = hit.amplicon_end - f_len + 2
-                        f_g_end = hit.amplicon_end + 1
-                        r_g_start = hit.amplicon_start + 1
-                        r_g_end = hit.amplicon_start + r_len
-                    else:
-                        f_g_start = hit.amplicon_start + 1
-                        f_g_end = hit.amplicon_start + f_len
-                        r_g_start = hit.amplicon_end - r_len + 2
-                        r_g_end = hit.amplicon_end + 1
-
-                    pair.tnblast_forward_fragments = genomic_range_to_fragments(
-                        f_g_start, f_g_end, exons
-                    )
-                    pair.tnblast_reverse_fragments = genomic_range_to_fragments(
-                        r_g_start, r_g_end, exons
-                    )
-
-                elif name in transcriptome_amplicons and transcriptome_amplicons[name]:
-                    hit = transcriptome_amplicons[name][0]
-                    tr_exons = transcript_exon_map.get(hit.seqid)
-                    if tr_exons is not None:
-                        pair.tnblast_forward_fragments = template_to_genomic(
-                            hit.amplicon_start, f_len, tr_exons
-                        )
-                        pair.tnblast_reverse_fragments = template_to_genomic(
-                            hit.amplicon_end - r_len + 1, r_len, tr_exons
-                        )
+                _compute_tnblast_fragments(
+                    pair, name, exons, locus,
+                    genome_amplicons, transcriptome_amplicons, transcript_exon_map,
+                )
 
     if not filtered:
         log.warning("No primer pairs passed tnBLAST specificity filter.")

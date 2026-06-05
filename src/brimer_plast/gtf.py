@@ -7,6 +7,8 @@ This module has no dependencies on other Brimer-PLAST modules except
 ``models``.  It does NOT open FASTA files or perform coordinate math.
 """
 
+from __future__ import annotations
+
 import csv
 import re
 from pathlib import Path

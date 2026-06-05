@@ -13,6 +13,8 @@ Lower-level GTF parsing and sequence extraction live in ``gtf.py`` and
 compatibility.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 
 import pyfaidx
@@ -313,6 +315,147 @@ def get_gene_locus(
     )
 
 
+# ── helper: transcript_id lookup ────────────────────────────────────────────
+
+
+def _tid_for_exons(
+    transcripts: dict[str, list[ExonInfo]],
+    exons: list[ExonInfo],
+) -> str:
+    """Look up the transcript_id for an exon list."""
+    for tid, el in transcripts.items():
+        if el is exons or el == exons:
+            return tid
+    return ""
+
+
+# ── per-mode helpers ─────────────────────────────────────────────────────────
+
+
+def _build_target_transcript_chain(
+    genome: pyfaidx.Fasta,
+    target_transcript: str,
+    gtf_path: str | Path,
+    transcripts: dict[str, list[ExonInfo]],
+    transcript_exon_lists: list[list[ExonInfo]],
+) -> list[ConservedExonChain]:
+    """Build a single conserved exon chain for a target transcript.
+
+    All junctions are passed to Primer3, but only junctions *unique* to
+    this transcript (not shared with any sibling of the same gene) are
+    marked as required.
+    """
+    exons = transcript_exon_lists[0]
+    template = _extract_sequence_from_genome(genome, exons)
+
+    if len(exons) < 2:
+        return [
+            ConservedExonChain(
+                id=target_transcript,
+                exons=exons,
+                template=template,
+                junction_positions_1based=[],
+                required_junction_positions_1based=[],
+            )
+        ]
+
+    template_order_exons = exons_in_template_order(exons)
+    junctions = _compute_junction_positions(template_order_exons)
+
+    gene_name = _find_gene_for_transcript(gtf_path, target_transcript)
+    if gene_name:
+        all_siblings = parse_gtf_grouped_by_transcript(gtf_path, target_gene=gene_name)
+        sibling_exon_lists = [
+            t for tid, t in all_siblings.items() if tid != target_transcript
+        ]
+        if sibling_exon_lists:
+            unique_positions = _compute_unique_junction_positions(
+                junctions, template_order_exons, sibling_exon_lists
+            )
+            required_junctions = unique_positions
+        else:
+            required_junctions = junctions
+    else:
+        required_junctions = junctions
+
+    return [
+        ConservedExonChain(
+            id=target_transcript,
+            exons=exons,
+            template=template,
+            junction_positions_1based=junctions,
+            required_junction_positions_1based=required_junctions,
+        )
+    ]
+
+
+def _build_target_gene_chains(
+    genome: pyfaidx.Fasta,
+    target_gene: str,
+    transcripts: dict[str, list[ExonInfo]],
+    transcript_exon_lists: list[list[ExonInfo]],
+) -> list[ConservedExonChain]:
+    """Build conserved exon chains for a target gene.
+
+    Multi-exon transcripts are analysed for conserved exon chains.
+    If conserved chains exist, those are returned along with any
+    single-exon transcripts as junctionless chains.  If no conserved
+    adjacencies are found, each multi-exon transcript becomes its own chain.
+    """
+    multi_exon_lists = [tl for tl in transcript_exon_lists if len(tl) >= 2]
+    single_exon_lists = [tl for tl in transcript_exon_lists if len(tl) < 2]
+
+    result: list[ConservedExonChain] = []
+
+    if multi_exon_lists:
+        try:
+            chains = compute_conserved_exon_chains(multi_exon_lists)
+            for chain_idx, chain in enumerate(chains, start=1):
+                template = _extract_sequence_from_genome(genome, chain.exons)
+                template_order_exons = exons_in_template_order(chain.exons)
+                junctions = _compute_junction_positions(template_order_exons)
+                chain_id = f"{target_gene}_chain_{chain_idx}"
+                result.append(
+                    ConservedExonChain(
+                        id=chain_id,
+                        exons=chain.exons,
+                        template=template,
+                        junction_positions_1based=junctions,
+                        required_junction_positions_1based=junctions,
+                    )
+                )
+        except ValueError:
+            for tl in multi_exon_lists:
+                template = _extract_sequence_from_genome(genome, tl)
+                template_order_exons = exons_in_template_order(tl)
+                junctions = _compute_junction_positions(template_order_exons)
+                tid = _tid_for_exons(transcripts, tl)
+                result.append(
+                    ConservedExonChain(
+                        id=tid,
+                        exons=tl,
+                        template=template,
+                        junction_positions_1based=junctions,
+                        required_junction_positions_1based=junctions,
+                    )
+                )
+
+    for tl in single_exon_lists:
+        template = _extract_sequence_from_genome(genome, tl)
+        tid = _tid_for_exons(transcripts, tl)
+        result.append(
+            ConservedExonChain(
+                id=tid,
+                exons=tl,
+                template=template,
+                junction_positions_1based=[],
+                required_junction_positions_1based=[],
+            )
+        )
+
+    return result
+
+
 # ── top-level entry point ────────────────────────────────────────────────────
 
 
@@ -326,22 +469,8 @@ def get_target_information(
 
     Exactly one of *target_gene* or *target_transcript* must be provided.
 
-    This function always returns whatever biological data is available.
-    Single-exon transcripts produce junctionless chains.  Transcripts with
-    no unique junctions produce chains with empty ``required_junction_positions_1based``.
-    The caller (typically the CLI) is responsible for enforcing junction-spanning
-    policy (e.g. dropping junctionless chains when --disable-junction-overlap is
-    not set).
-
-    When *target_gene* is provided, multi-exon transcripts are analysed for
-    conserved exon chains.  If conserved chains exist, those are returned along
-    with any single-exon transcripts as junctionless chains.  If no conserved
-    adjacencies are found, each multi-exon transcript becomes its own chain.
-
-    When *target_transcript* is provided, returns a single chain for that
-    transcript.  All junctions are passed to Primer3, but only junctions
-    *unique* to this transcript (not shared with any sibling of the same
-    gene) are marked as required.
+    Delegates to :func:`_build_target_transcript_chain` or
+    :func:`_build_target_gene_chains` based on the target type.
 
     Returns a list of :class:`ConservedExonChain` objects with populated
     templates and junction positions.
@@ -356,116 +485,16 @@ def get_target_information(
         target_gene=target_gene,
         target_transcript=target_transcript,
     )
-
     transcript_exon_lists = list(transcripts.values())
 
-    def _tid_for_exons(exons: list[ExonInfo]) -> str:
-        """Look up the transcript_id for an exon list."""
-        for tid, el in transcripts.items():
-            if el is exons or el == exons:
-                return tid
-        return ""
-
-    # Open the genome FASTA once — reused across all extract calls below
     genome = pyfaidx.Fasta(str(fasta_path), read_ahead=10_000)
     try:
         if target_transcript:
-            exons = transcript_exon_lists[0]
-            template = _extract_sequence_from_genome(genome, exons)
-
-            if len(exons) < 2:
-                return [
-                    ConservedExonChain(
-                        id=target_transcript,
-                        exons=exons,
-                        template=template,
-                        junction_positions_1based=[],
-                        required_junction_positions_1based=[],
-                    )
-                ]
-
-            template_order_exons = exons_in_template_order(exons)
-            junctions = _compute_junction_positions(template_order_exons)
-
-            gene_name = _find_gene_for_transcript(gtf_path, target_transcript)
-            if gene_name:
-                all_siblings = parse_gtf_grouped_by_transcript(
-                    gtf_path, target_gene=gene_name
-                )
-                sibling_exon_lists = [
-                    t for tid, t in all_siblings.items() if tid != target_transcript
-                ]
-                if sibling_exon_lists:
-                    unique_positions = _compute_unique_junction_positions(
-                        junctions, template_order_exons, sibling_exon_lists
-                    )
-                    required_junctions = unique_positions
-                else:
-                    required_junctions = junctions
-            else:
-                required_junctions = junctions
-
-            return [
-                ConservedExonChain(
-                    id=target_transcript,
-                    exons=exons,
-                    template=template,
-                    junction_positions_1based=junctions,
-                    required_junction_positions_1based=required_junctions,
-                )
-            ]
-        else:
-            multi_exon_lists = [tl for tl in transcript_exon_lists if len(tl) >= 2]
-            single_exon_lists = [tl for tl in transcript_exon_lists if len(tl) < 2]
-
-            result: list[ConservedExonChain] = []
-
-            if multi_exon_lists:
-                try:
-                    chains = compute_conserved_exon_chains(multi_exon_lists)
-                    for chain_idx, chain in enumerate(chains, start=1):
-                        template = _extract_sequence_from_genome(genome, chain.exons)
-                        template_order_exons = exons_in_template_order(chain.exons)
-                        junctions = _compute_junction_positions(template_order_exons)
-                        chain_id = f"{target_gene}_chain_{chain_idx}"
-                        result.append(
-                            ConservedExonChain(
-                                id=chain_id,
-                                exons=chain.exons,
-                                template=template,
-                                junction_positions_1based=junctions,
-                                required_junction_positions_1based=junctions,
-                            )
-                        )
-                except ValueError:
-                    for tl in multi_exon_lists:
-                        template = _extract_sequence_from_genome(genome, tl)
-                        template_order_exons = exons_in_template_order(tl)
-                        junctions = _compute_junction_positions(template_order_exons)
-                        tid = _tid_for_exons(tl)
-                        result.append(
-                            ConservedExonChain(
-                                id=tid,
-                                exons=tl,
-                                template=template,
-                                junction_positions_1based=junctions,
-                                required_junction_positions_1based=junctions,
-                            )
-                        )
-
-            for tl in single_exon_lists:
-                template = _extract_sequence_from_genome(genome, tl)
-                tid = _tid_for_exons(tl)
-                result.append(
-                    ConservedExonChain(
-                        id=tid,
-                        exons=tl,
-                        template=template,
-                        junction_positions_1based=[],
-                        required_junction_positions_1based=[],
-                    )
-                )
-
-            return result
+            return _build_target_transcript_chain(
+                genome, target_transcript, gtf_path, transcripts, transcript_exon_lists,
+            )
+        return _build_target_gene_chains(
+            genome, target_gene or "", transcripts, transcript_exon_lists,
+        )
     finally:
         genome.close()

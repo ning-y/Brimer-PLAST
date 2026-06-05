@@ -6,6 +6,8 @@ genomic space.  Also provides the reverse_complement utility and
 exon-ordering helper used throughout the codebase.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 
 import pyfaidx
