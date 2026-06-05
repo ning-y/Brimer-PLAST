@@ -14,13 +14,17 @@ Core project dependencies are provided by `flake.nix` at the project root. Use `
 
 **Always run `pytest` and `python` through `nix develop --command`.** The `primer3-py` C-extension and `tntblast` binary are only available inside the nix shell. Do not invoke `.venv/bin/python` or `.venv/bin/pytest` directly — the `.venv/` directory is created by the nix `shellHook` and has `--system-site-packages` enabled; it is broken outside `nix develop`.
 
+### Never skip integration tests
+
+**Do not use `-k "not integration"` or any other filter that excludes integration tests.** The data is already present on disk (`tests/fixtures/ce11/`), so there is no reason to skip them. Doing so masks real failures that only manifest with real genome data.
+
 Common commands:
 
 ```bash
-# Run all tests (includes C. elegans integration, ~2 minutes)
+# Run ALL tests (includes C. elegans integration, ~2 minutes)
 nix develop --command timeout 240 pytest tests/
 
-# Run a single test file
+# Run a single test file (still runs if it happens to be an integration test)
 nix develop --command pytest tests/test_pipeline.py -v
 
 # Run a single test class or method

@@ -43,11 +43,12 @@ Junction-spanning control:
   (use for genomic PCR rather than qRT-PCR)
 
 Primer design options:
-- `--num-return` / `-n` — Number of candidate pairs per conserved exon chain (default: 10)
+- `--num-return` / `-n` — Number of candidate pairs per conserved exon chain (default: 50)
 - `--min-tm`, `--max-tm`, `--opt-tm` — Melting temperature range (default: 57/63/60 °C)
 - `--min-size`, `--max-size`, `--opt-size` — Primer length (default: 18/25/20 bp)
 - `--min-gc`, `--max-gc` — GC content percent (default: 40/60%)
-- `--product-min`, `--product-max` — Amplicon size range (default: 100-400 bp)
+- `--product-min`, `--product-max` — Amplicon size range (default: 80-200 bp)
+- `--max-amplicon` — Maximum tnBLAST amplicon search length (default: 2000)
 
 Output options:
 - `--tsv` — Tab-separated machine-readable output

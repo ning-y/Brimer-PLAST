@@ -32,9 +32,8 @@ from brimer_plast.diagram import (
     TRANSCRIPT_CAP,
     _GeneDiagram,
     _SequenceRow,
-    exons_in_template_order,
 )
-from brimer_plast.genome import reverse_complement
+from brimer_plast.genome import exons_in_template_order, reverse_complement
 
 # ── Layout constants ────────────────────────────────────────────────────────
 MARGIN = 0.75 * inch

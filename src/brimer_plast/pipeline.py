@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Any
 
 from brimer_plast.filter import filter_specific_pairs
-from brimer_plast.primer import design_primers
 from brimer_plast.tnblast import AmpliconHit, _parse_tnblast_amplicons, run_tnblast, write_assay_file
 from brimer_plast.genome import (
     build_transcript_to_gene_map,
