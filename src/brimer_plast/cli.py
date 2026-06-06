@@ -80,8 +80,12 @@ def _run_for_target(
     tsv: bool,
     verbose: int,
     pdf_path: str | None,
-) -> None:
-    """Run the full Brimer-PLAST pipeline for a single target."""
+) -> list[str]:
+    """Run the full Brimer-PLAST pipeline for a single target.
+
+    Returns:
+        A list of warning strings accumulated during the run.
+    """
     log = get_logger()
 
     target_gene = target_key if target_type == "gene" else None
@@ -207,6 +211,7 @@ def _run_for_target(
         except Exception as e:
             typer.echo(f"  PDF generation failed: {e}", err=True)
 
+    return result.warnings
 
 
 @app.callback(invoke_without_command=True)
@@ -388,6 +393,7 @@ def main(
     version_str = get_git_version()
 
     # ── Loop over each target (independent invocation) ─────────────────
+    all_warnings: dict[str, list[str]] = {}
     for idx, (target_type, target_key) in enumerate(targets):
         typer.echo(
             f"\n{'=' * 60}",
@@ -408,7 +414,7 @@ def main(
             slug = target_key.replace("|", "_").replace("/", "_")
             pdf_path = f"brimer_plast_{slug}_{datetime.now():%Y%m%d_%H%M%S}.pdf"
 
-        _run_for_target(
+        warnings = _run_for_target(
             target_key=target_key,
             target_type=target_type,
             genome=genome,
@@ -430,3 +436,20 @@ def main(
             verbose=verbose,
             pdf_path=pdf_path,
         )
+        if warnings:
+            all_warnings[target_key] = warnings
+
+    # ── Reprint all accumulated warnings at the end ────────────────────
+    if all_warnings:
+        typer.echo(
+            f"\n{'=' * 60}",
+        )
+        typer.echo(
+            "  WARNINGS",
+        )
+        typer.echo(
+            f"{'=' * 60}",
+        )
+        for target_key, warns in all_warnings.items():
+            for w in warns:
+                typer.echo(f"  [{target_key}] {w}")

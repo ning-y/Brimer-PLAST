@@ -42,6 +42,12 @@ class PipelineResult:
     filtered_pairs: list[PrimerPair] = field(default_factory=list)
     all_candidates: list[PrimerPair] = field(default_factory=list)
 
+    # Warnings accumulated during the run (e.g. fallback to per-transcript
+    # chains, chain-specific primer design failures).  The CLI reprints
+    # these at the end of a multi-target loop so they aren't lost in
+    # scrolling output.
+    warnings: list[str] = field(default_factory=list)
+
     @property
     def has_results(self) -> bool:
         """Whether any filtered pairs survived tnBLAST screening."""
@@ -150,6 +156,22 @@ def run_pipeline(
         target_gene=target_gene,
         target_transcript=target_transcript,
     )
+
+    # Detect fallback chains (per-transcript fallback when no conserved
+    # exon-exon junctions exist across transcripts of the gene)
+    pipeline_warnings: list[str] = []
+    fallback_chains = [c for c in chains if c.fallback]
+    if fallback_chains:
+        fallback_ids = [c.id for c in fallback_chains]
+        msg = (
+            f"No conserved exon-exon junctions were found across transcripts of "
+            f"{target_key}. Primer design fell back to per-transcript chains "
+            f"({', '.join(fallback_ids)}). Primers from these chains may not "
+            f"target all transcripts of the gene — verify manually, or use "
+            f"--target-transcript for single-transcript design."
+        )
+        log.warning(msg)
+        pipeline_warnings.append(msg)
 
     if not disable_junction_overlap:
         chains_with_junctions = [c for c in chains if c.junction_positions_1based]
@@ -321,6 +343,7 @@ def run_pipeline(
         locus=locus,
         filtered_pairs=filtered,
         all_candidates=flat_pairs,
+        warnings=pipeline_warnings,
     )
 
 
