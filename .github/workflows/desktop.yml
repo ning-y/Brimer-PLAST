@@ -1,0 +1,229 @@
+name: Build desktop app
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  # ── Job 1: tnBLAST binary per platform ──────────────────────
+  tntblast:
+    strategy:
+      matrix:
+        include:
+          - os: macos-13
+            label: macOS Intel
+            shell: bash
+          - os: macos-14
+            label: macOS ARM
+            shell: bash
+          - os: windows-latest
+            label: Windows
+          - os: ubuntu-24.04
+            label: Linux
+
+    runs-on: ${{ matrix.os }}
+    name: tnBLAST — ${{ matrix.label }}
+
+    steps:
+      - name: Download tnBLAST source
+        shell: bash
+        run: |
+          curl -sL -o tnblast.tar.gz \
+            https://github.com/jgans/thermonucleotideBLAST/archive/refs/tags/v2.77.tar.gz
+          mkdir tnblast-src
+          tar xzf tnblast.tar.gz -C tnblast-src --strip-components=1
+
+      # macOS
+      - name: Compile (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          cd tnblast-src
+          make \
+            CC=clang++ \
+            FLAGS="-O3 -Wall -std=c++14" \
+            LIBS="-lm -lz" \
+            OPENMP= \
+            -j$(sysctl -n hw.logicalcpu)
+
+      # Linux
+      - name: Compile (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          cd tnblast-src
+          make \
+            CC=g++ \
+            FLAGS="-O3 -Wall -std=c++14" \
+            LIBS="-lm -lz" \
+            OPENMP= \
+            -j$(nproc)
+
+      # Windows (MSYS2 setup + build)
+      - name: Setup MSYS2
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-make
+
+      - name: Patch source for MinGW
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          cd tnblast-src
+          sed -i '/^template <class A>$/,/^}$/d' nuc_cruc.h
+
+      - name: Compile (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          cd tnblast-src
+          mingw32-make \
+            CC=g++ \
+            FLAGS="-O3 -Wall -std=c++14 -include stdint.h" \
+            LIBS="-lm -lz" \
+            OPENMP=
+
+      # Verify
+      - name: Check binary exists
+        shell: bash
+        run: |
+          for f in tnblast-src/tntblast.exe tnblast-src/tntblast; do
+            if [ -f "$f" ]; then echo "OK: found $f"; exit 0; fi
+          done
+          echo "FAIL: no tnBLAST binary found"
+          ls tnblast-src/
+          exit 1
+
+      - name: Upload tnBLAST binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: tntblast-${{ runner.os }}
+          path: tnblast-src/tntblast*
+          if-no-files-found: error
+
+  # ── Job 2: PyInstaller bundle per platform ──────────────────
+  pybrimer:
+    needs: tntblast
+    strategy:
+      matrix:
+        include:
+          - os: macos-13
+            label: macOS Intel
+          - os: macos-14
+            label: macOS ARM
+          - os: windows-latest
+            label: Windows
+          - os: ubuntu-24.04
+            label: Linux
+    runs-on: ${{ matrix.os }}
+    name: PyInstaller — ${{ matrix.label }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: |
+          pip install primer3-py pyinstaller -q
+          pip install -e . -q
+
+      - name: Download tnBLAST binary
+        uses: actions/download-artifact@v4
+        with:
+          name: tntblast-${{ runner.os }}
+          path: tntblast-bin/
+
+      - name: Build PyInstaller bundle
+        run: |
+          TNT=$(ls tntblast-bin/tntblast* | head -1)
+          pyinstaller \
+            --onefile \
+            --name pybrimer \
+            --add-binary "$TNT:." \
+            sidecar.py
+
+      - name: Verify bundle
+        run: |
+          ls -lh dist/pybrimer*
+          echo '{"id":1,"command":"unknown","params":{}}' | timeout 5 ./dist/pybrimer* 2>/dev/null && echo "OK"
+
+      - name: Upload PyInstaller bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: pybrimer-${{ runner.os }}
+          path: dist/pybrimer*
+          if-no-files-found: error
+
+  # ── Job 3: Electron installer per platform ──────────────────
+  electron:
+    needs: pybrimer
+    strategy:
+      matrix:
+        include:
+          - os: macos-13
+            label: macOS Intel
+            builder-flag: --mac --x64
+            artifact-glob: '*.dmg'
+          - os: macos-14
+            label: macOS ARM
+            builder-flag: --mac --arm64
+            artifact-glob: '*.dmg'
+          - os: windows-latest
+            label: Windows
+            builder-flag: --win
+            artifact-glob: '*.exe'
+          - os: ubuntu-24.04
+            label: Linux
+            builder-flag: --linux AppImage
+            artifact-glob: '*.AppImage'
+    runs-on: ${{ matrix.os }}
+    name: Electron — ${{ matrix.label }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Install Linux dependencies (AppImage)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libfuse2
+
+      - name: Download PyInstaller bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: pybrimer-${{ runner.os }}
+          path: dist/
+
+      - name: Normalize PyInstaller bundle name
+        run: |
+          if [ -f dist/pybrimer.exe ]; then
+            mv dist/pybrimer.exe dist/pybrimer
+          fi
+
+      - name: Install npm dependencies
+        run: npm install
+        working-directory: electron
+
+      - name: Build Electron installer
+        run: npx electron-builder ${{ matrix.builder-flag }}
+        working-directory: electron
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: brimer-plast-${{ matrix.label }}
+          path: electron/dist/${{ matrix.artifact-glob }}
+          if-no-files-found: error
