@@ -201,6 +201,36 @@ The process of translating coordinates from a spliced mRNA sequence back to
 genomic chromosome coordinates. Used to ensure compatibility between 
 different data sources (Primer3, tnBLAST) in the Genome View.
 
+**Primer pair name**:
+A descriptive identifier for each primer pair in the format
+``{short_tid}:{amplicon_start}-{amplicon_end}``, where *amplicon_start*
+and *amplicon_end* are 1-based positions relative to the mature mRNA
+sequence of the representative transcript for that chain.
+_Avoid_: pair_1, pair_2, generic counter
+
+**Short transcript ID (short_tid)**:
+The shortest suffix of a transcript ID (plus 4 characters) that uniquely
+identifies every transcript in the gene. Computed per-gene: find L such
+that the last L characters of all transcript IDs are unique, then use
+L+4 (the fifth-shortest suffix). Canonical example:
+``NM_001289746.1`` with a sibling ``NM_001234567.1`` has L=3 (``6.1``
+vs ``7.1``), so short_tid_length=7 → ``9746.1``.
+_Avoid_: short_name, abbreviation, short form
+
+**Representative transcript**:
+For each conserved exon chain, the alphanumerically first transcript
+ID (lexicographic order) among those whose exons contain the chain's
+exons. Used to compute the chain's transcript offset and to derive
+short_tid for the primer pair name.
+_Avoid_: Canonical transcript, default transcript
+
+**Transcript offset (chain_offset)**:
+The cumulative length (in bases) of the representative transcript's
+exons that appear 5' of the conserved chain's first exon, measured in
+mRNA 5'→3' order (TSS = position 1). Added to template-relative
+amplicon coordinates to produce transcript-relative coordinates.
+Stored on ``ConservedExonChain.transcript_offset``.
+
 ## Example dialogue
 
 **Dev**: I ran Brimer-PLAST on the mouse genome targeting the GAPDH gene. It returned a primer set of 12 specificity-filtered primer pairs.

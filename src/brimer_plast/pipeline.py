@@ -202,6 +202,23 @@ def run_pipeline(
     flat_pairs = [p for _, pairs in all_candidates for p in pairs]
     log.info("Total: %d candidate pair(s) across all chains.", len(flat_pairs))
 
+    # ── Step 2.5: Compute pair names ───────────────────────────────────────
+    chain_map = {c.id: c for c in chains}
+    for pair in flat_pairs:
+        chain = chain_map[pair.chain_id]
+        short_tid = chain.representative_tid[-chain.short_tid_length:]
+        if (
+            pair.forward_start is not None
+            and pair.forward_len is not None
+            and pair.reverse_start is not None
+            and pair.reverse_len is not None
+        ):
+            a_start = chain.transcript_offset + pair.forward_start + 1
+            a_end = chain.transcript_offset + pair.reverse_start + pair.reverse_len
+            pair.pair_name = f"{short_tid}:{a_start}-{a_end}"
+        else:
+            pair.pair_name = f"{short_tid}:?"
+
     # ── Step 3: Filter with tnBLAST ────────────────────────────────────────
     log.info("Running tnBLAST specificity filter...")
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -270,10 +287,8 @@ def run_pipeline(
             pair.pair_number = i
 
         # ── Step 4: Compute genomic fragment lists ─────────────────────────
-        chain_map = {c.id: c for c in chains}
-
-        for i, pair in enumerate(flat_pairs, start=1):
-            name = f"pair_{i}"
+        for pair in flat_pairs:
+            name = pair.pair_name
 
             if (
                 pair.forward_start is not None
@@ -409,9 +424,10 @@ def dump_debug_info(
 
     log.debug("")
     log.debug("--- All Candidate Pairs (includes filtered-out) ---")
-    for i, pair in enumerate(all_flat_pairs, start=1):
+    for pair in all_flat_pairs:
+        name = pair.pair_name or "unnamed"
         mark = " [FILTERED IN]" if pair.pair_number is not None else ""
-        log.debug(f"  pair_{i}: {pair.forward_seq} / {pair.reverse_seq}  chain={pair.chain_id}{mark}")
+        log.debug(f"  {name}: {pair.forward_seq} / {pair.reverse_seq}  chain={pair.chain_id}{mark}")
         log.debug(f"    P3 F: {pair.primer3_forward_fragments}")
         log.debug(f"    P3 R: {pair.primer3_reverse_fragments}")
         log.debug(f"    tn F: {pair.tnblast_forward_fragments}")

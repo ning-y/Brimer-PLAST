@@ -16,20 +16,16 @@ class TestWriteAssayFile:
     def test_writes_tab_delimited(self, tmp_path):
         """Assay file should have three tab-separated columns."""
         pairs = [
-            PrimerPair(forward_seq="ATCG", reverse_seq="CGAT"),
-            PrimerPair(forward_seq="GCTA", reverse_seq="TAGC"),
+            PrimerPair(forward_seq="ATCG", reverse_seq="CGAT", pair_name="test1"),
+            PrimerPair(forward_seq="GCTA", reverse_seq="TAGC", pair_name="test2"),
         ]
         path = tmp_path / "assays.txt"
         write_assay_file(pairs, path)
 
         lines = path.read_text().strip().splitlines()
         assert len(lines) == 2
-        for i, line in enumerate(lines):
-            parts = line.split("\t")
-            assert len(parts) == 3
-            assert parts[0] == f"pair_{i + 1}"
-            assert parts[1] == pairs[i].forward_seq
-            assert parts[2] == pairs[i].reverse_seq
+        assert lines[0] == f"test1\t{pairs[0].forward_seq}\t{pairs[0].reverse_seq}"
+        assert lines[1] == f"test2\t{pairs[1].forward_seq}\t{pairs[1].reverse_seq}"
 
     def test_empty_pairs_writes_empty_file(self, tmp_path):
         """An empty list should produce an empty file."""
@@ -41,29 +37,29 @@ class TestWriteAssayFile:
 class TestParseTnblastOutput:
     def test_parses_single_hit(self, tmp_path):
         """A single amplicon should count as 1."""
-        text = """name = pair_1
+        text = """name = 9746.1:45-199
 forward primer = ...
 """
         path = tmp_path / "tnt_single.txt"
         path.write_text(text)
         result = _parse_tnblast_output(str(path))
-        assert result == {"pair_1": 1}
+        assert result == {"9746.1:45-199": 1}
 
     def test_parses_multiple_hits(self, tmp_path):
         """Multiple amplicons for same assay should count >1."""
-        text = """name = pair_1
+        text = """name = 9746.1:45-199
 forward primer = ...
 
-name = pair_1
+name = 9746.1:45-199
 forward primer = ...
 
-name = pair_2
+name = 4567.1:331-470
 forward primer = ...
 """
         path = tmp_path / "tnt_multi.txt"
         path.write_text(text)
         result = _parse_tnblast_output(str(path))
-        assert result == {"pair_1": 2, "pair_2": 1}
+        assert result == {"9746.1:45-199": 2, "4567.1:331-470": 1}
 
     def test_empty_output(self, tmp_path):
         """Empty output should return empty dict."""
@@ -78,7 +74,7 @@ class TestParseTnblastAmplicons:
 
     def test_parses_single_amplicon_with_coords(self, tmp_path):
         """A single amplicon with seqid and coordinate range."""
-        text = """name = pair_1
+        text = """name = 9746.1:45-199
 amplicon range = 100 .. 300
 forward primer = ...
 
@@ -87,24 +83,24 @@ forward primer = ...
         path = tmp_path / "tnt.txt"
         path.write_text(text)
         result = _parse_tnblast_amplicons(str(path))
-        assert "pair_1" in result
-        assert len(result["pair_1"]) == 1
-        hit = result["pair_1"][0]
+        assert "9746.1:45-199" in result
+        assert len(result["9746.1:45-199"]) == 1
+        hit = result["9746.1:45-199"][0]
         assert hit.seqid == "chrI"
         assert hit.amplicon_start == 100
         assert hit.amplicon_end == 300
 
     def test_multiple_amplicons_same_assay(self, tmp_path):
         """Multiple amplicons for the same assay in different genomic regions."""
-        text = """name = pair_1
+        text = """name = 9746.1:45-199
 amplicon range = 100 .. 200
 
 >chrI
-name = pair_1
+name = 9746.1:45-199
 amplicon range = 1000 .. 1200
 
 >chrII
-name = pair_2
+name = 4567.1:331-470
 amplicon range = 500 .. 600
 
 >chrI
@@ -112,8 +108,8 @@ amplicon range = 500 .. 600
         path = tmp_path / "tnt_multi.txt"
         path.write_text(text)
         result = _parse_tnblast_amplicons(str(path))
-        assert len(result["pair_1"]) == 2
-        assert len(result["pair_2"]) == 1
+        assert len(result["9746.1:45-199"]) == 2
+        assert len(result["4567.1:331-470"]) == 1
 
     def test_empty_output(self, tmp_path):
         """Empty file yields empty dict."""
@@ -123,7 +119,7 @@ amplicon range = 500 .. 600
 
     def test_amplicon_range_without_seqid(self, tmp_path):
         """Output with amplicon range but no seqid should not emit."""
-        text = """name = pair_1
+        text = """name = 9746.1:45-199
 amplicon range = 100 .. 200
 forward primer = ...
 """
@@ -134,15 +130,15 @@ forward primer = ...
 
     def test_multiple_assays_with_results(self, tmp_path):
         """Multiple assays each with their own amplicons."""
-        text = """name = pair_1
+        text = """name = 9746.1:45-199
 amplicon range = 100 .. 200
 
 >chrI
-name = pair_1
+name = 9746.1:45-199
 amplicon range = 300 .. 400
 
 >chrI
-name = pair_2
+name = 4567.1:331-470
 amplicon range = 500 .. 600
 
 >chrV
@@ -150,9 +146,9 @@ amplicon range = 500 .. 600
         path = tmp_path / "tnt_multi_assay.txt"
         path.write_text(text)
         result = _parse_tnblast_amplicons(str(path))
-        assert len(result["pair_1"]) == 2
-        assert len(result["pair_2"]) == 1
-        assert result["pair_2"][0].seqid == "chrV"
+        assert len(result["9746.1:45-199"]) == 2
+        assert len(result["4567.1:331-470"]) == 1
+        assert result["4567.1:331-470"][0].seqid == "chrV"
 
 
 class TestRunTnblast:
@@ -164,6 +160,7 @@ class TestRunTnblast:
             PrimerPair(
                 forward_seq="GCTAGCATCGCTACGTACGT",
                 reverse_seq="TGCTAGCTACGTACGATCGC",
+                pair_name="test_1",
             ),
         ]
         with tempfile.TemporaryDirectory() as tmp:
@@ -178,7 +175,7 @@ class TestRunTnblast:
             )
         # These primers are from the fixture template, so they should hit
         assert len(result) == 1
-        assert result["pair_1"] >= 1
+        assert result["test_1"] >= 1
 
     def test_junk_primers_no_hits(self, mini_genome_fasta):
         """Completely unrelated primers should produce no hits."""
@@ -188,6 +185,7 @@ class TestRunTnblast:
             PrimerPair(
                 forward_seq="AAAAAAAAAAAAAAAAAAAA",
                 reverse_seq="TTTTTTTTTTTTTTTTTTTT",
+                pair_name="junk_1",
             ),
         ]
         with tempfile.TemporaryDirectory() as tmp:
@@ -208,7 +206,7 @@ class TestRunTnblast:
         import tempfile
 
         pairs = [
-            PrimerPair(forward_seq="ATCG", reverse_seq="CGAT"),
+            PrimerPair(forward_seq="ATCG", reverse_seq="CGAT", pair_name="test_1"),
         ]
         with tempfile.TemporaryDirectory() as tmp:
             assay_path = os.path.join(tmp, "assays.txt")
@@ -226,9 +224,9 @@ class TestFilterSpecificPairs:
 
     def test_junction_mode_gc0_tc1_passes(self):
         """Junction mode: gc=0, all transcriptome hits on target should pass."""
-        pairs = [PrimerPair(forward_seq="F1", reverse_seq="R1")]
+        pairs = [PrimerPair(forward_seq="F1", reverse_seq="R1", pair_name="p1")]
         result = filter_specific_pairs(
-            pairs, {"pair_1": 0}, {"pair_1": ["target_gene"]},
+            pairs, {"p1": 0}, {"p1": ["target_gene"]},
             target_gene="target_gene",
         )
         assert len(result) == 1
@@ -236,47 +234,47 @@ class TestFilterSpecificPairs:
 
     def test_junction_mode_gc1_tc1_fails(self):
         """Junction mode: gc=1 should fail (expected gc=0)."""
-        pairs = [PrimerPair(forward_seq="F1", reverse_seq="R1")]
+        pairs = [PrimerPair(forward_seq="F1", reverse_seq="R1", pair_name="p1")]
         result = filter_specific_pairs(
-            pairs, {"pair_1": 1}, {"pair_1": ["target_gene"]},
+            pairs, {"p1": 1}, {"p1": ["target_gene"]},
             target_gene="target_gene",
         )
         assert len(result) == 0
 
     def test_junction_mode_gc0_tc0_fails(self):
         """Junction mode: no hits should fail."""
-        pairs = [PrimerPair(forward_seq="F1", reverse_seq="R1")]
+        pairs = [PrimerPair(forward_seq="F1", reverse_seq="R1", pair_name="p1")]
         result = filter_specific_pairs(
-            pairs, {"pair_1": 0}, {},
+            pairs, {"p1": 0}, {},
             target_gene="target_gene", junction_mode=True,
         )
         assert len(result) == 0
 
     def test_junction_mode_off_target_gene_fails(self):
         """Transcriptome hits on a different gene should fail."""
-        pairs = [PrimerPair(forward_seq="F1", reverse_seq="R1")]
+        pairs = [PrimerPair(forward_seq="F1", reverse_seq="R1", pair_name="p1")]
         result = filter_specific_pairs(
-            pairs, {"pair_1": 0}, {"pair_1": ["other_gene"]},
+            pairs, {"p1": 0}, {"p1": ["other_gene"]},
             target_gene="target_gene", junction_mode=True,
         )
         assert len(result) == 0
 
     def test_junction_mode_isoforms_pass(self):
         """Multiple transcriptome hits on the same target gene should pass."""
-        pairs = [PrimerPair(forward_seq="F1", reverse_seq="R1")]
+        pairs = [PrimerPair(forward_seq="F1", reverse_seq="R1", pair_name="p1")]
         result = filter_specific_pairs(
-            pairs, {"pair_1": 0}, {"pair_1": ["IL1B", "IL1B"]},
+            pairs, {"p1": 0}, {"p1": ["IL1B", "IL1B"]},
             target_gene="IL1B", junction_mode=True,
         )
         assert len(result) == 1
 
     def test_non_junction_mode_gc1_tc1_passes(self):
         """Non-junction mode: gc=1, tc=1 should pass."""
-        pairs = [PrimerPair(forward_seq="F1", reverse_seq="R1")]
+        pairs = [PrimerPair(forward_seq="F1", reverse_seq="R1", pair_name="p1")]
         result = filter_specific_pairs(
             pairs,
-            {"pair_1": 1},
-            {"pair_1": ["target_gene"]},
+            {"p1": 1},
+            {"p1": ["target_gene"]},
             target_gene="target_gene",
             junction_mode=False,
         )
@@ -285,11 +283,11 @@ class TestFilterSpecificPairs:
 
     def test_non_junction_mode_gc0_tc1_fails(self):
         """Non-junction mode: gc=0 should fail (expected gc=1)."""
-        pairs = [PrimerPair(forward_seq="F1", reverse_seq="R1")]
+        pairs = [PrimerPair(forward_seq="F1", reverse_seq="R1", pair_name="p1")]
         result = filter_specific_pairs(
             pairs,
-            {"pair_1": 0},
-            {"pair_1": ["target_gene"]},
+            {"p1": 0},
+            {"p1": ["target_gene"]},
             target_gene="target_gene",
             junction_mode=False,
         )
@@ -298,15 +296,15 @@ class TestFilterSpecificPairs:
     def test_junction_mode_mixed_pairs(self):
         """Multiple pairs with mixed results."""
         pairs = [
-            PrimerPair(forward_seq="F1", reverse_seq="R1"),  # passes
-            PrimerPair(forward_seq="F2", reverse_seq="R2"),  # fails (gc=1)
-            PrimerPair(forward_seq="F3", reverse_seq="R3"),  # fails (no tc hits)
-            PrimerPair(forward_seq="F4", reverse_seq="R4"),  # passes
+            PrimerPair(forward_seq="F1", reverse_seq="R1", pair_name="p1"),   # passes
+            PrimerPair(forward_seq="F2", reverse_seq="R2", pair_name="p2"),   # fails (gc=1)
+            PrimerPair(forward_seq="F3", reverse_seq="R3", pair_name="p3"),   # fails (no tc hits)
+            PrimerPair(forward_seq="F4", reverse_seq="R4", pair_name="p4"),   # passes
         ]
         result = filter_specific_pairs(
             pairs,
-            {"pair_1": 0, "pair_2": 1, "pair_3": 0, "pair_4": 0},
-            {"pair_1": ["target_gene"], "pair_4": ["target_gene", "target_gene"]},
+            {"p1": 0, "p2": 1, "p3": 0, "p4": 0},
+            {"p1": ["target_gene"], "p4": ["target_gene", "target_gene"]},
             target_gene="target_gene",
             junction_mode=True,
         )
@@ -317,5 +315,3 @@ class TestFilterSpecificPairs:
     def test_empty_inputs(self):
         """Empty primer list and empty counts produce empty result."""
         assert filter_specific_pairs([], {}, {}, target_gene="x") == []
-
-

@@ -222,10 +222,10 @@ def draw_gene_diagram(canvas, x, y, width, locus, filtered_pairs, chains, target
     curr_y -= 10
 
     for pair in filtered_pairs:
-        pnum = pair.pair_number or "?"
+        pname = pair.pair_name or f"Pair {pair.pair_number or '?'}"
         canvas.setFont("Helvetica-Bold", LABEL_FONT_SIZE)
         canvas.setFillColor(colors.black)
-        canvas.drawString(x, curr_y + 4, f"Pair {pnum}")
+        canvas.drawString(x, curr_y + 4, pname)
 
         # Panel A (Blue) - pre-computed primer3 fragments
         if pair.primer3_forward_fragments or pair.primer3_reverse_fragments:
@@ -239,7 +239,7 @@ def draw_gene_diagram(canvas, x, y, width, locus, filtered_pairs, chains, target
             for index, (frags, label) in enumerate(all_pts):
                 alignment = "left" if index == 0 else "right"
                 _draw_fragments(canvas, frags, curr_y+4, 4, v_min, v_span, origin_x, draw_w,
-                                PANEL_A_COLOR, PANEL_A_FILL, f"{pnum}{label}", alignment)
+                                PANEL_A_COLOR, PANEL_A_FILL, label, alignment)
 
         # Panel B (Red) - pre-computed tnBLAST fragments
         if pair.tnblast_forward_fragments or pair.tnblast_reverse_fragments:
@@ -253,7 +253,7 @@ def draw_gene_diagram(canvas, x, y, width, locus, filtered_pairs, chains, target
             for index, (frags, label) in enumerate(b_items):
                 alignment = "left" if index == 0 else "right"
                 _draw_fragments(canvas, frags, curr_y-1, 4, v_min, v_span, origin_x, draw_w,
-                                PANEL_B_COLOR, PANEL_B_FILL, f"{pnum}{label}", alignment)
+                                PANEL_B_COLOR, PANEL_B_FILL, label, alignment)
 
         curr_y -= (PRIMER_ROW_H + PAIR_GAP)
 

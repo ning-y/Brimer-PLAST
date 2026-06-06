@@ -20,10 +20,13 @@ def write_assay_file(
     """Write primer pairs as a tnBLAST tab-delimited assay file.
 
     Format:  name\\tforward_seq\\treverse_seq
+
+    Each pair's :attr:`PrimerPair.pair_name` is used as the assay name.
     """
     with open(path, "w") as f:
-        for i, pair in enumerate(primer_pairs, start=1):
-            f.write(f"pair_{i}\t{pair.forward_seq}\t{pair.reverse_seq}\n")
+        for pair in primer_pairs:
+            name = pair.pair_name or "unnamed"
+            f.write(f"{name}\t{pair.forward_seq}\t{pair.reverse_seq}\n")
 
 
 def run_tnblast(
@@ -50,9 +53,9 @@ def run_tnblast(
             file is used and cleaned up automatically.
 
     Returns:
-        { "pair_1": 3, "pair_2": 1, ... }
-        The count is the number of predicted amplicons (1 = specific,
-        >1 = off-target amplification, 0 = no amplification).
+        { "9746.1:45-199": 1, ... }
+        Maps each assay name to the number of predicted amplicons
+        (1 = specific, >1 = off-target amplification, 0 = no amplification).
 
     Raises:
         RuntimeError: tnBLAST exited with a non-zero status.

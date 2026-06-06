@@ -83,6 +83,10 @@ class PrimerPair:
     # Sequential number within the final filtered output (set by CLI)
     pair_number: int | None = None
 
+    # Descriptive name in "short_tid:amplicon_start-amplicon_end" format
+    # (set by pipeline before tnBLAST assay file is written)
+    pair_name: str = ""
+
 
 @dataclass
 class ConservedExonChain:
@@ -103,6 +107,16 @@ class ConservedExonChain:
     template: str
     junction_positions_1based: list[int] = field(default_factory=list)
     required_junction_positions_1based: list[int] = field(default_factory=list)
+
+    # Transcript naming metadata (set during chain construction)
+    transcript_offset: int = 0  # bp from TSS to chain start in transcript mRNA
+    representative_tid: str = ""  # transcript ID chosen for naming this chain
+    short_tid_length: int = 0  # L+2 for the whole gene
+
+    # Fallback flag: True when this chain was created because no conserved
+    # exon-exon junctions could be found across transcripts of the gene.
+    # Primers from fallback chains may not cover all transcripts.
+    fallback: bool = False
 
 
 @dataclass

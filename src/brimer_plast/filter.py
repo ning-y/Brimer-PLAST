@@ -34,10 +34,14 @@ def filter_specific_pairs(
         transcriptome_targets: Pair -> list of gene names hit in transcriptome.
         target_gene: The gene the primers are designed for.
         junction_mode: Whether junction-spanning is enforced.
+
+    Each pair is looked up by its :attr:`PrimerPair.pair_name`.
     """
     specific: list[PrimerPair] = []
-    for i, pair in enumerate(primer_pairs, start=1):
-        name = f"pair_{i}"
+    for pair in primer_pairs:
+        name = pair.pair_name
+        if not name:
+            continue
         gc = genome_counts.get(name, 0)
         targenes = transcriptome_targets.get(name, [])
 

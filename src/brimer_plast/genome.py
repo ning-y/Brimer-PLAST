@@ -329,6 +329,84 @@ def _tid_for_exons(
     return ""
 
 
+# ── naming helpers ─────────────────────────────────────────────────────────
+
+
+def _compute_short_tid_length(transcript_ids: list[str]) -> int:
+    """Fifth-shortest suffix length that uniquely identifies every ID.
+
+    Finds the smallest L such that the last L characters of every
+    transcript ID are unique within the list, then returns L + 4.
+    With a single transcript, L=1 trivially, so returns 5.
+    """
+    if not transcript_ids:
+        return 0
+    if len(transcript_ids) == 1:
+        return 5
+
+    max_len = max(len(t) for t in transcript_ids)
+    for L in range(1, max_len + 1):
+        suffixes = [t[-L:] for t in transcript_ids]
+        if len(set(suffixes)) == len(transcript_ids):
+            return L + 4
+    return max_len + 4
+
+
+def _transcript_contains_chain(
+    transcript_exons: list[ExonInfo],
+    chain_exons: list[ExonInfo],
+) -> bool:
+    """True if every exon in *chain_exons* (by start/end key) is present."""
+    transcript_keys = {_exon_key(ex) for ex in transcript_exons}
+    return all(_exon_key(ex) in transcript_keys for ex in chain_exons)
+
+
+def _compute_chain_offset_in_transcript(
+    transcript_exons: list[ExonInfo],
+    chain_first_exon: ExonInfo,
+) -> int:
+    """Cumulative bp of transcript exons (5'\u21923') before chain's first exon."""
+    ordered = exons_in_template_order(transcript_exons)
+    offset = 0
+    for ex in ordered:
+        if _exon_key(ex) == _exon_key(chain_first_exon):
+            break
+        offset += ex.end - ex.start + 1
+    else:
+        raise ValueError(
+            f"Chain's first exon ({_exon_key(chain_first_exon)}) "
+            f"not found in the chosen transcript."
+        )
+    return offset
+
+
+def _pick_representative_for_chain(
+    chain: ConservedExonChain,
+    transcripts: dict[str, list[ExonInfo]],
+) -> tuple[str, int]:
+    """Pick the alphanumerically first transcript that contains *chain*, and
+    return ``(representative_tid, transcript_offset)``.
+
+    Raises ValueError if no transcript contains the chain's exons.
+    """
+    candidates = [
+        tid
+        for tid, exons in transcripts.items()
+        if _transcript_contains_chain(exons, chain.exons)
+    ]
+    if not candidates:
+        raise ValueError(
+            f"No transcript contains chain {chain.id!r}. This should "
+            f"not happen — the chain was derived from these transcripts."
+        )
+
+    rep = min(candidates)  # alphanumerically first
+    offset = _compute_chain_offset_in_transcript(
+        transcripts[rep], chain.exons[0],
+    )
+    return rep, offset
+
+
 # ── per-mode helpers ─────────────────────────────────────────────────────────
 
 
@@ -385,6 +463,9 @@ def _build_target_transcript_chain(
             template=template,
             junction_positions_1based=junctions,
             required_junction_positions_1based=required_junctions,
+            transcript_offset=0,
+            representative_tid=target_transcript,
+            short_tid_length=5,
         )
     ]
 
@@ -401,9 +482,15 @@ def _build_target_gene_chains(
     If conserved chains exist, those are returned along with any
     single-exon transcripts as junctionless chains.  If no conserved
     adjacencies are found, each multi-exon transcript becomes its own chain.
+
+    Each chain is annotated with transcript_offset, representative_tid,
+    and short_tid_length for primer pair naming (see ADR 0002).
     """
     multi_exon_lists = [tl for tl in transcript_exon_lists if len(tl) >= 2]
     single_exon_lists = [tl for tl in transcript_exon_lists if len(tl) < 2]
+
+    all_tids = list(transcripts.keys())
+    short_tid_length = _compute_short_tid_length(all_tids)
 
     result: list[ConservedExonChain] = []
 
@@ -415,6 +502,9 @@ def _build_target_gene_chains(
                 template_order_exons = exons_in_template_order(chain.exons)
                 junctions = _compute_junction_positions(template_order_exons)
                 chain_id = f"{target_gene}_chain_{chain_idx}"
+                rep, offset = _pick_representative_for_chain(
+                    chain, transcripts
+                )
                 result.append(
                     ConservedExonChain(
                         id=chain_id,
@@ -422,6 +512,9 @@ def _build_target_gene_chains(
                         template=template,
                         junction_positions_1based=junctions,
                         required_junction_positions_1based=junctions,
+                        transcript_offset=offset,
+                        representative_tid=rep,
+                        short_tid_length=short_tid_length,
                     )
                 )
         except ValueError:
@@ -437,6 +530,10 @@ def _build_target_gene_chains(
                         template=template,
                         junction_positions_1based=junctions,
                         required_junction_positions_1based=junctions,
+                        transcript_offset=0,
+                        representative_tid=tid,
+                        short_tid_length=short_tid_length,
+                        fallback=True,
                     )
                 )
 
@@ -450,6 +547,9 @@ def _build_target_gene_chains(
                 template=template,
                 junction_positions_1based=[],
                 required_junction_positions_1based=[],
+                transcript_offset=0,
+                representative_tid=tid,
+                short_tid_length=short_tid_length,
             )
         )
 

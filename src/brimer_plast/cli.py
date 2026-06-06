@@ -129,33 +129,33 @@ def _run_for_target(
     if filtered:
         if tsv:
             typer.echo(
-                "pair\tforward_seq\treverse_seq\treverse_rc\tforward_tm\t"
+                "pair_name\tforward_seq\treverse_seq\treverse_rc\tforward_tm\t"
                 "reverse_tm\tforward_gc\treverse_gc\tproduct_size"
             )
-            for i, pair in enumerate(filtered, start=1):
+            for pair in filtered:
                 rc_rev = reverse_complement(pair.reverse_seq or "")
                 typer.echo(
-                    f"{i}\t{pair.forward_seq}\t{pair.reverse_seq}\t{rc_rev}\t"
+                    f"{pair.pair_name}\t{pair.forward_seq}\t{pair.reverse_seq}\t{rc_rev}\t"
                     f"{pair.forward_tm:.1f}\t{pair.reverse_tm:.1f}\t"
                     f"{pair.forward_gc:.0f}\t{pair.reverse_gc:.0f}\t"
                     f"{pair.product_size}"
                 )
         else:
             typer.echo(
-                f"{'Pair':<6} {'Forward':<28} {'Tm(°C)':<8} {'%GC':<5} "
+                f"{'Pair Name':<20} {'Forward':<28} {'Tm(°C)':<8} {'%GC':<5} "
                 f"{'Reverse':<28} {'Tm(°C)':<8} {'%GC':<5} {'Size':<6}"
             )
-            typer.echo("-" * 100)
-            for i, pair in enumerate(filtered, start=1):
+            typer.echo("-" * 120)
+            for pair in filtered:
                 rc_rev = reverse_complement(pair.reverse_seq or "")
                 typer.echo(
-                    f"{i:<6} {pair.forward_seq:<28} {pair.forward_tm:<8.1f} "
+                    f"{pair.pair_name:<20} {pair.forward_seq:<28} {pair.forward_tm:<8.1f} "
                     f"{pair.forward_gc:<5.0f} {pair.reverse_seq:<28} "
                     f"{pair.reverse_tm:<8.1f} {pair.reverse_gc:<5.0f} "
                     f"{pair.product_size:<6}"
                 )
                 typer.echo(
-                    f"{'':<6} {'':<28} {'':<8} {'':<5} {f'({rc_rev})':<28}"
+                    f"{'':<20} {'':<28} {'':<8} {'':<5} {f'({rc_rev})':<28}"
                 )
     else:
         typer.echo("No specificity-filtered primer pairs to display.")

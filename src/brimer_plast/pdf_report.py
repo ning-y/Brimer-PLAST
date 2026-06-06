@@ -132,12 +132,12 @@ def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, ta
             fontName="Courier",
         )
 
-        data: list[list[str | Paragraph]] = [["Pair", "Forward", "Tm", "GC%", "Reverse", "Tm", "GC%", "Size"]]
+        data: list[list[str | Paragraph]] = [["Pair Name", "Forward", "Tm", "GC%", "Reverse", "Tm", "GC%", "Size"]]
         for p in filtered_pairs:
             rc_rev = reverse_complement(p.reverse_seq or "")
             rev_p = Paragraph(f"&nbsp;{p.reverse_seq}<br/>({rc_rev})", table_cell_style)
             data.append([
-                str(p.pair_number),
+                p.pair_name or str(p.pair_number),
                 Paragraph(p.forward_seq or "", table_cell_style),
                 f"{p.forward_tm:.1f}",
                 f"{p.forward_gc:.0f}",
@@ -147,7 +147,7 @@ def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, ta
                 str(p.product_size)
             ])
 
-        cw = [CONTENT_WIDTH * x for x in [0.06, 0.22, 0.08, 0.08, 0.22, 0.08, 0.08, 0.18]]
+        cw = [CONTENT_WIDTH * x for x in [0.10, 0.20, 0.08, 0.08, 0.20, 0.08, 0.08, 0.18]]
         t = Table(data, colWidths=cw)
         t.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
