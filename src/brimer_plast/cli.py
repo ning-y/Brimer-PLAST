@@ -64,7 +64,6 @@ def _run_for_target(
     target_type: str,  # "gene" or "transcript"
     genome: Path,
     annotations: Path,
-    disable_junction_overlap: bool,
     num_return: int,
     min_tm: float,
     max_tm: float,
@@ -112,7 +111,6 @@ def _run_for_target(
             annotations=annotations,
             target_key=target_key,
             target_type=target_type,
-            disable_junction_overlap=disable_junction_overlap,
             primer_args=primer_args,
             max_amplicon=max_amplicon,
         )
@@ -192,7 +190,6 @@ def _run_for_target(
                 cli_args={
                     "target_gene": target_gene,
                     "target_transcript": target_transcript,
-                    "disable_junction_overlap": disable_junction_overlap,
                     "num_return": num_return,
                     "min_tm": min_tm,
                     "max_tm": max_tm,
@@ -247,17 +244,11 @@ def main(
         help="Target transcript ID (e.g. NM_001289746.1). Repeat for multiple "
         "targets. One of --target-gene or --target-transcript is required.",
     ),
-    disable_junction_overlap: bool = typer.Option(
-        False,
-        "--disable-junction-overlap",
-        help="Allow primers that do not span an exon-exon junction. "
-        "Use this for genomic PCR rather than qRT-PCR.",
-    ),
     num_return: int = typer.Option(
         PRIMER_NUM_RETURN,
         "--num-return",
         "-n",
-        help="Number of candidate primer pairs to design (before filtering).",
+        help="Maximum number of primer pairs to report (output cap).",
     ),
     min_tm: float = typer.Option(
         PRIMER_MIN_TM,
@@ -343,9 +334,9 @@ def main(
 ) -> None:
     """Design primers for a target and filter for specificity.
 
-    By default, at least one primer in each pair must span an exon-exon
-    junction (qRT-PCR mode).  Use --disable-junction-overlap for
-    genomic PCR.
+    Both junction-spanning and intron-spanning primers are designed
+    automatically; results are deduplicated with junction pairs given
+    priority.
     """
     configure_logging(verbose)
     log = get_logger()
@@ -419,7 +410,6 @@ def main(
             target_type=target_type,
             genome=genome,
             annotations=annotations,
-            disable_junction_overlap=disable_junction_overlap,
             num_return=num_return,
             min_tm=min_tm,
             max_tm=max_tm,

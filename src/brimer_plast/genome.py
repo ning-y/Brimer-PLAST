@@ -202,8 +202,7 @@ def compute_conserved_exon_chains(
     if not conserved_adj:
         raise ValueError(
             "No conserved exon-exon junctions found across transcripts. "
-            "Use --disable-junction-overlap to design primers "
-            "without junction-spanning."
+            "Fallback per-transcript chains will be created."
         )
 
     # Build a lookup from exon key -> ExonInfo (union across transcripts)
@@ -225,8 +224,7 @@ def compute_conserved_exon_chains(
     if not chain_starts:
         raise ValueError(
             "No conserved exon-exon junctions found across transcripts. "
-            "Use --disable-junction-overlap to design primers "
-            "without junction-spanning."
+            "Fallback per-transcript chains will be created."
         )
 
     chains: list[ConservedExonChain] = []
@@ -254,8 +252,7 @@ def compute_conserved_exon_chains(
     if not chains:
         raise ValueError(
             "No conserved exon-exon junctions found across transcripts. "
-            "Use --disable-junction-overlap to design primers "
-            "without junction-spanning."
+            "Fallback per-transcript chains will be created."
         )
 
     return chains

@@ -26,13 +26,26 @@ _Avoid_: Splice junction, exon boundary
 **Junction-spanning primer**:
 A primer whose sequence straddles an exon-exon junction — the primer has one
 portion in the upstream exon and the other in the downstream exon. This is the
-default constraint for all primers Brimer-PLAST designs.
+primary design mode (mode A). The tool always attempts to produce
+junction-spanning primers.
 _Avoid_: Junction-overlapping primer, spanning primer
 
-**--disable-junction-overlap**:
-The CLI flag to turn off the junction-spanning requirement. Use for genomic PCR
-where gDNA contamination is not a concern.
-_Avoid_: --genomic-pcr, --no-junction
+**Intron-spanning primer**:
+A primer pair whose forward and reverse primers bind to different exons with
+a total intronic separation >1000 bp. This is the secondary design mode
+(mode B). The large genomic intron prevents efficient amplification from
+gDNA during qRT-PCR. Mode B pairs are post-filtered: Primer3 receives no
+junction constraint, then pairs on the same exon or with intronic separation
+≤1000 bp are dropped.
+_Avoid_: Intron-bridging primer, gDNA-spanning primer
+
+**Intronic separation**:
+The sum of all intronic bases (in genomic coordinates) between the exons
+containing the forward and reverse primers. Computed from the exon list:
+for each adjacent pair of genomic exons between the two primer-binding
+exons, ``next.start - current.end - 1``. Single-intron distance is used for
+adjacent exons; multi-intron sum is used for non-adjacent exons.
+_Avoid_: Intron length, intron distance
 
 **Target gene**:
 A gene name (e.g. GAPDH) specified with ``--target-gene``. Brimer-PLAST groups
@@ -69,8 +82,10 @@ exons use standard `low-high` (e.g., `chr1:1000-2000`).
 _Avoid_: 0-based coordinates, BED format
 
 **Candidate primer pair**:
-A forward and reverse primer produced by primer3, prior to specificity filtering
-by tnBLAST. These may amplify off-target regions of the genome.
+A forward and reverse primer produced by either design mode (junction-spanning
+or intron-spanning), prior to specificity filtering by tnBLAST. Both modes
+design on the same spliced template. Results are deduplicated by primer
+sequence with junction-spanning pairs given priority.
 _Avoid_: Raw primers, unfiltered primers
 
 **Forward primer**:
@@ -274,6 +289,6 @@ _Avoid_: Single-view report, combined view
 
 **Domain expert**: Good — that's what we'd call working primers. You can order synthesis for the top 3.
 
-**Dev**: I had to use --disable-junction-overlap because GAPDH has only one conserved exon chain with two exons, and primer3 couldn't find any junction-spanning candidates within the product size range.
+**Dev**: I ran it on GAPDH. Most of the returned pairs are junction-spanning, but a few are intron-spanning — primers on different exons with a big intron between them.
 
-**Domain expert**: That happens when exons are too short. Try widening the product size range or reduce the number of junctions required.
+**Domain expert**: Good, the tool tried both strategies automatically. The intron-spanning ones should work as long as the intron is large enough to prevent gDNA amplification.

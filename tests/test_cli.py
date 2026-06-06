@@ -33,11 +33,6 @@ class TestHelp:
         result = runner.invoke(app, ["--help"])
         assert "--target-transcript" in result.stdout
 
-    def test_help_shows_disable_junction_overlap(self):
-        """--help should document --disable-junction-overlap."""
-        result = runner.invoke(app, ["--help"])
-        assert "--disable-junction-overlap" in result.stdout
-
     def test_help_shows_pdf_options(self):
         """--help should document PDF output options."""
         result = runner.invoke(app, ["--help"])
@@ -165,10 +160,10 @@ class TestRequiredArgs:
 
 
 class TestEndToEnd:
-    def test_produces_primer_set_disabled_junction(
+    def test_produces_primer_set_dual_mode(
         self, mini_genome_fasta, mini_genome_gtf, tmp_path
     ):
-        """Full pipeline with --disable-junction-overlap should produce a primer set."""
+        """Full pipeline with default dual mode should produce a primer set."""
         pdf_path = tmp_path / "report.pdf"
         result = runner.invoke(
             app,
@@ -181,7 +176,6 @@ class TestEndToEnd:
                 "test_gene",
                 "--num-return",
                 "3",
-                "--disable-junction-overlap",
                 "--output-pdf",
                 str(pdf_path),
             ],
@@ -190,10 +184,10 @@ class TestEndToEnd:
         # Should output primer pairs in tabular format
         assert "Forward" in result.stdout or "forward" in result.stdout
 
-    def test_produces_primer_set_with_transcript_disabled(
+    def test_produces_primer_set_with_transcript(
         self, mini_genome_fasta, mini_genome_gtf, tmp_path
     ):
-        """--target-transcript with --disable-junction-overlap should also work."""
+        """--target-transcript should produce primers."""
         pdf_path = tmp_path / "report.pdf"
         result = runner.invoke(
             app,
@@ -206,7 +200,6 @@ class TestEndToEnd:
                 "test_transcript",
                 "--num-return",
                 "3",
-                "--disable-junction-overlap",
                 "--output-pdf",
                 str(pdf_path),
             ],
@@ -271,7 +264,6 @@ class TestEndToEnd:
                 "test_gene",
                 "--num-return",
                 "3",
-                "--disable-junction-overlap",
                 "--output-pdf",
                 str(pdf1),
                 "--output-pdf",
@@ -302,7 +294,6 @@ class TestEndToEnd:
                 "test_transcript",
                 "--num-return",
                 "3",
-                "--disable-junction-overlap",
                 "--output-pdf",
                 str(pdf1),
                 "--output-pdf",
@@ -316,7 +307,7 @@ class TestEndToEnd:
     def test_tsv_flag_produces_tab_separated_output(
         self, mini_genome_fasta, mini_genome_gtf, tmp_path
     ):
-        """--tsv with --disable-junction-overlap should produce tab-separated output."""
+        """--tsv should produce tab-separated output."""
         pdf_path = tmp_path / "report.pdf"
         result = runner.invoke(
             app,
@@ -330,7 +321,6 @@ class TestEndToEnd:
                 "--num-return",
                 "3",
                 "--tsv",
-                "--disable-junction-overlap",
                 "--output-pdf",
                 str(pdf_path),
             ],
@@ -343,10 +333,10 @@ class TestEndToEnd:
         assert "forward_seq" in header
         assert "reverse_seq" in header
 
-    def test_single_exon_with_disable_junction_overlap(
+    def test_single_exon_produces_warning_no_primers(
         self, mini_genome_fasta, single_exon_gtf, tmp_path
     ):
-        """A single-exon gene with --disable-junction-overlap should produce primers."""
+        """A single-exon gene should produce a warning and no primers."""
         pdf_path = tmp_path / "report.pdf"
         result = runner.invoke(
             app,
@@ -359,38 +349,19 @@ class TestEndToEnd:
                 "single_exon_gene",
                 "--num-return",
                 "3",
-                "--disable-junction-overlap",
                 "--output-pdf",
                 str(pdf_path),
             ],
         )
-        # Should succeed because junction policy is relaxed
-        assert result.exit_code in (0, 1), f"CLI failed: {result.stdout}"
+        # Should exit 0 with a warning about single-exon chains
+        assert result.exit_code == 0, f"CLI failed: {result.stdout}"
+        assert "single-exon" in result.stdout.lower()
+        assert "no specificity-filtered primer pairs" in result.stdout.lower()
 
-    def test_single_exon_fails_without_disable_junction_overlap(
-        self, mini_genome_fasta, single_exon_gtf
-    ):
-        """A single-exon gene without --disable-junction-overlap should fail."""
-        result = runner.invoke(
-            app,
-            [
-                "--genome",
-                mini_genome_fasta,
-                "--annotations",
-                single_exon_gtf,
-                "--target-gene",
-                "single_exon_gene",
-                "--num-return",
-                "3",
-            ],
-        )
-        assert result.exit_code != 0
-        assert "disable-junction-overlap" in result.stdout.lower()
-
-    def test_single_exon_fails_multi_target(
+    def test_single_exon_multi_target_warns(
         self, mini_genome_fasta, single_exon_gtf, tmp_path
     ):
-        """Multiple targets where one has single-exon genes all fail."""
+        """Multiple single-exon targets should both warn, not error."""
         pdf1 = tmp_path / "r1.pdf"
         pdf2 = tmp_path / "r2.pdf"
         result = runner.invoke(
@@ -412,6 +383,6 @@ class TestEndToEnd:
                 str(pdf2),
             ],
         )
-        # First target fails -> exit
-        assert result.exit_code != 0
-        assert "disable-junction-overlap" in result.stdout.lower()
+        # Both targets should warn about single-exon chains
+        assert result.exit_code == 0, f"CLI failed: {result.stdout}"
+        assert "single-exon" in result.stdout.lower()

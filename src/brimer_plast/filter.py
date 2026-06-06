@@ -24,8 +24,9 @@ def filter_specific_pairs(
       - genome count == 0   (junction-spanning primers don't match genome)
       - all transcriptome hits map to the target gene
 
-    In non-junction mode (``--disable-junction-overlap``), a pair passes if:
-      - genome count == 1   (single genomic target)
+    In non-junction mode (intron-spanning), a pair passes if:
+      - genome count == 1   (single genomic target — the primer binding sites
+        exist in the genome)
       - all transcriptome hits map to the target gene
 
     Args:

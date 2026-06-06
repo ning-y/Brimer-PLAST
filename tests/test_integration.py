@@ -131,8 +131,8 @@ class TestPrimerDesignOnRealGenes:
 class TestEndToEnd:
     """Full pipeline via CLI."""
 
-    def test_cli_homt1_produces_output_junction_disabled(self, tmp_path):
-        """brimer-plast --target-gene homt-1 with --disable-junction-overlap."""
+    def test_cli_homt1_produces_output_dual_mode(self, tmp_path):
+        """brimer-plast --target-gene homt-1 with default dual mode."""
         pdf_path = tmp_path / "report.pdf"
         result = runner.invoke(
             app,
@@ -145,7 +145,6 @@ class TestEndToEnd:
                 "homt-1",
                 "--num-return",
                 "5",
-                "--disable-junction-overlap",
                 "--output-pdf",
                 str(pdf_path),
             ],
@@ -156,29 +155,8 @@ class TestEndToEnd:
         # Output should have primer table with columns
         assert "Forward" in result.stdout
 
-    def test_cli_homt1_runs_with_junction_default(self, tmp_path):
-        """Default junction-spanning mode should at least run without error."""
-        pdf_path = tmp_path / "report.pdf"
-        result = runner.invoke(
-            app,
-            [
-                "--genome",
-                str(GENOME_FASTA),
-                "--annotations",
-                str(GTF_FILE),
-                "--target-gene",
-                "homt-1",
-                "--num-return",
-                "5",
-                "--output-pdf",
-                str(pdf_path),
-            ],
-        )
-        # May produce output or say no primers passed filtering — either is valid
-        assert result.exit_code in (0, 1)
-
     def test_cli_with_specific_tm(self, tmp_path):
-        """Custom temperature range with --disable-junction-overlap."""
+        """Custom temperature range with dual mode."""
         pdf_path = tmp_path / "report.pdf"
         result = runner.invoke(
             app,
@@ -197,7 +175,6 @@ class TestEndToEnd:
                 "62",
                 "--opt-tm",
                 "60",
-                "--disable-junction-overlap",
                 "--output-pdf",
                 str(pdf_path),
             ],

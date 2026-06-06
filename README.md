@@ -4,9 +4,11 @@ Design qRT-PCR primers that span exon-exon junctions using primer3 and tnBLAST.
 
 Named as a local, open alternative to [NCBI Primer-BLAST](https://www.ncbi.nlm.nih.gov/tools/primer-blast/).
 
-By default, every primer pair is constrained so that **at least one primer overlaps
-an exon-exon junction** — this prevents amplification from genomic DNA contamination
-in qRT-PCR experiments.  Use `--disable-junction-overlap` for genomic PCR.
+Primers are designed in two automatic modes:
+- **Junction mode** — at least one primer overlaps an exon-exon junction
+- **Intron mode** — forward and reverse primers fall on different exons with
+  a total intronic separation >1000 bp
+Results are deduplicated by primer sequence, with junction pairs given priority.
 
 ## Quick start
 
@@ -38,10 +40,6 @@ Required:
 - `--annotations` / `-a` — Gene annotation GTF file
 - `--target-gene` or `--target-transcript` — Which gene/transcript to design primers for
   (repeatable: `--target-gene GAPDH --target-gene ACTB` for multiple targets)
-
-Junction-spanning control:
-- `--disable-junction-overlap` — Allow primers that do not span an exon-exon junction
-  (use for genomic PCR rather than qRT-PCR)
 
 Primer design options:
 - `--num-return` / `-n` — Number of candidate pairs per conserved exon chain (default: 50)
@@ -76,15 +74,23 @@ Output options:
    the exon sequences from the genome FASTA, producing a mature-mRNA template.
 
 3. **Design primers** — Runs primer3 (via primer3-py C-extension, ~1000× faster
-   than subprocess wrappers) on each template.  By default, passes the
-   `SEQUENCE_OVERLAP_JUNCTION_LIST` parameter as a **soft penalty** to guide
-   Primer3 toward junction-spanning pairs.  A **post-filter** then enforces the
-   hard requirement: at least one primer (forward or reverse) must actually
-   overlap a required junction.  For `--target-gene`, the required junctions
-   are all conserved junctions.  For `--target-transcript`, the required
-   junctions are only those unique to that transcript.  Candidates from all
-   chains are pooled.  Each pair is assigned a descriptive name
-   (`{short_tid}:{amplicon_start}-{amplicon_end}`, e.g. `9746.1:45-199`).
+   than subprocess wrappers) on each template in two modes:
+
+   - **Junction mode** — passes `SEQUENCE_OVERLAP_JUNCTION_LIST` as a soft
+     penalty to guide Primer3 toward junction-spanning pairs, then hard
+     post-filters: at least one primer must overlap a required junction.
+   - **Intron mode** — no junction constraint; post-filters so forward and
+     reverse primers are on different exons with total intronic separation
+     >1000 bp.
+
+   For `--target-gene`, the required junctions are all conserved junctions.
+   For `--target-transcript`, the required junctions are only those unique
+   to that transcript.  Each mode requests `num_return + 500` from Primer3,
+   ensuring enough candidates for the downstream merge.  Results are
+   deduplicated by primer sequence with junction pairs given priority, then
+   truncated at the user's `--num-return` cap.  Each pair is assigned a
+   descriptive name (`{short_tid}:{amplicon_start}-{amplicon_end}`, e.g.
+   `9746.1:45-199`).
 
 4. **Filter for specificity** — Runs tnBLAST to check each candidate pair for
    off-target amplification; only pairs with exactly one predicted amplicon
@@ -96,17 +102,15 @@ Output options:
 
 ## When it errors
 
-- **No conserved exon-exon junctions** — The target gene's transcripts share
-  no common splice sites (or all transcripts have single exons).  Use
-  `--disable-junction-overlap` to relax the constraint.
+- **No candidate primers** — Neither junction nor intron mode could find
+  qualifying pairs within the given constraints.  This can happen with
+  single-exon targets (no junctions, no introns) or when constraints are
+  too tight.  Try widening the product size range (e.g. `--product-min 80
+  --product-max 300`).
 - **No unique junctions** (with `--target-transcript`) — The target transcript
   shares all its exon-exon junctions with other transcripts of the same gene,
-  so no primer can be specific to this transcript alone.  Use
-  `--disable-junction-overlap` to design non-junction-spanning primers (which
-  may also amplify sibling transcripts).
-- **No candidate primers** — Primer3 could not find qualifying pairs within
-  the given temperature/size/product constraints.  Try widening the product
-  size range (e.g. `--product-min 80 --product-max 300`).
+  so no junction-spanning primer can be specific to this transcript alone.
+  The intron mode may still produce pairs, but they won't be isoform-specific.
 
 ## Limitations
 
@@ -116,8 +120,8 @@ Output options:
   `--target-transcript` with a specific transcript ID to target a single
   isoform.
 - **Single-exon genes** — Genes with only one exon (including all
-  mitochondrial genes) have no exon-exon junctions.  Use
-  `--disable-junction-overlap` to design primers for these targets.
+  mitochondrial genes) have no junctions and no introns.  Neither design
+  mode can produce primers for these targets.
 
 ## Development
 
