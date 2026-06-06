@@ -154,23 +154,26 @@ _Avoid_: Hard constraint, secondary filter
 
 **ConservedExonChain model**:
 A typed data structure (``ConservedExonChain`` dataclass) that holds a chain ID,
-the list of constituent exons, the spliced template string, the 1-based
-junction positions (used by Primer3), and required junction positions (used
-for post-filtering). Replaces the old ``TargetInfo`` model.
+the list of constituent exons, the spliced template string, 1-based junction
+positions (Primer3), required junction positions (post-filtering), and naming
+metadata (``transcript_offset``, ``representative_tid``, ``short_tid_length``).
+A ``fallback`` flag marks chains created from a single transcript when no
+conserved exon-exon junctions exist across all transcripts of the gene.
 _Avoid_: TargetInfo, chain model
 
 **Primer pair model**:
 A typed data structure (``PrimerPair`` dataclass) that holds forward/reverse
-sequences, Tm, GC%, product size, penalty, and pre-computed genomic fragment
-lists for both primer3 (Panel A) and tnBLAST (Panel B) sources.
+sequences, Tm, GC%, product size, penalty, a descriptive ``pair_name``
+(``{short_tid}:{amplicon_start}-{amplicon_end}``), and pre-computed genomic
+fragment lists for both primer3 (Panel A) and tnBLAST (Panel B) sources.
 _Avoid_: Raw dict, untyped pair
 
 **Genomic fragment**:
 A typed data structure (``GenomicFragment`` dataclass) describing a single
 contiguous region of the genome with seqid, start, end, and strand. A
 junction-spanning primer will have multiple fragments — one per exon.
-Fragments are pre-computed in the CLI and stored on ``PrimerPair`` so that
-the renderer never performs coordinate math.
+Fragments are pre-computed during pipeline execution and stored on
+``PrimerPair`` so that the renderer never performs coordinate math.
 _Avoid_: Tuple, raw coordinate, (seqid, start, end, strand)
 
 **Exon info model**:
@@ -183,6 +186,13 @@ The acceptable PCR amplicon length (bp) passed to primer3 as
 ``PRIMER_PRODUCT_SIZE_RANGE``. Controlled via ``--product-min`` and
 ``--product-max``. Defaults to 80–200 bp for qRT-PCR.
 _Avoid_: Amplicon size range, fragment length
+
+**Fallback chain**:
+When no conserved exon-exon junctions exist across all transcripts of a gene,
+Brimer-PLAST creates one ``ConservedExonChain`` per transcript as a fallback
+(``ConservedExonChain.fallback == True``). Primers from fallback chains may
+not amplify all transcripts of the gene. A warning is printed to stderr.
+_Avoid_: Degenerate chain, single-transcript chain, per-transcript chain
 
 **Gene Locus**:
 The full genomic coordinates and collection of all annotated transcripts for a 

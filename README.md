@@ -37,6 +37,7 @@ Required:
 - `--genome` / `-g` — Genome FASTA file
 - `--annotations` / `-a` — Gene annotation GTF file
 - `--target-gene` or `--target-transcript` — Which gene/transcript to design primers for
+  (repeatable: `--target-gene GAPDH --target-gene ACTB` for multiple targets)
 
 Junction-spanning control:
 - `--disable-junction-overlap` — Allow primers that do not span an exon-exon junction
@@ -51,6 +52,13 @@ Primer design options:
 - `--max-amplicon` — Maximum tnBLAST amplicon search length (default: 2000)
 
 Output options:
+- `--output-pdf <path>` — Write a PDF report with per-chain genome views.
+  Repeat once per target for multi-target runs
+  (e.g. `--output-pdf gapdh.pdf --output-pdf actb.pdf`).
+  If omitted, a report is auto-generated; use `--no-pdf` to suppress.
+- `--no-pdf` — Suppress PDF report generation entirely.
+- `--verbose` / `-v` — Increase verbosity. `-v` for pipeline progress,
+  `-vv` for per-pair fragment-list details and template coordinates.
 - `--tsv` — Tab-separated machine-readable output
 
 ## How it works
@@ -58,6 +66,8 @@ Output options:
 1. **Parse annotations** — Reads the GTF file, groups exons by `transcript_id`.
    For `--target-gene`, computes *conserved exon chains* (maximal contiguous runs
    of exons where every adjacent pair is present in all transcripts).
+   If no conserved junctions exist across the gene, creates one chain per
+   transcript as a **fallback** (with a user-visible warning).
    For `--target-transcript`, uses that transcript's exons directly. It then
    determines which junctions are *unique* to this transcript (not shared
    with any sibling transcript of the same gene) for post-filtering.
@@ -73,13 +83,16 @@ Output options:
    overlap a required junction.  For `--target-gene`, the required junctions
    are all conserved junctions.  For `--target-transcript`, the required
    junctions are only those unique to that transcript.  Candidates from all
-   chains are pooled.
+   chains are pooled.  Each pair is assigned a descriptive name
+   (`{short_tid}:{amplicon_start}-{amplicon_end}`, e.g. `9746.1:45-199`).
 
 4. **Filter for specificity** — Runs tnBLAST to check each candidate pair for
    off-target amplification; only pairs with exactly one predicted amplicon
    (the on-target one) survive.
 
 5. **Output** — Prints a ranked table of specificity-filtered primer pairs.
+   Optionally writes a PDF report with per-chain genome views, transcript
+   contribution styling, and filtered pair tables.
 
 ## When it errors
 
@@ -109,8 +122,10 @@ Output options:
 ## Development
 
 ```bash
-nix develop               # enter dev shell (Python 3.12 + compiled tnBLAST + ruff + pytest)
-pytest tests/             # run all tests (93 tests: unit + integration)
+nix develop               # enter dev shell (Python 3.12 + compiled tnBLAST + ruff + pytest + pyright)
+pytest tests/             # run all tests (190 tests: unit + integration)
+pyright                   # type-check the codebase
+ruff check src/           # lint
 bash tests/fixtures/download-ce11.sh  # download C. elegans for integration tests
 ```
 
@@ -118,15 +133,19 @@ bash tests/fixtures/download-ce11.sh  # download C. elegans for integration test
 
 Human-readable (default):
 ```
-Pair   Forward (5→3)                Tm(°C)   %GC   Reverse (5→3)                Tm(°C)   %GC   Size
-----------------------------------------------------------------------------------------------------
-1      TTCGTCGAAGGACTGCAGAC         60.0     55    TGCAGTGCTTTCGAGACCAT         60.0     50    281
+Pair Name            Forward (5'→3')             Tm(°C)    %GC   Reverse (5'→3')             Tm(°C)    %GC   Size
+-------------------------------------------------------------------------------------------------------------------
+9746.1:45-199        TTCGTCGAAGGACTGCAGAC         60.0      55    TGCAGTGCTTTCGAGACCAT         60.0      50    281
+                                                         (TGCAGTGCTTTCGAGACCAT)
 ```
+
+The first line shows the reverse primer as stored (same strand as forward).
+The indented second line shows the reverse-complement form (actual PCR binding strand).
 
 TSV (`--tsv`):
 ```
-pair	forward_seq	reverse_seq	forward_tm	reverse_tm	forward_gc	reverse_gc	product_size
-1	TTCGTCGAAGGACTGCAGAC	TGCAGTGCTTTCGAGACCAT	60.0	60.0	55	50	281
+pair_name	forward_seq	reverse_seq	reverse_rc	forward_tm	reverse_tm	forward_gc	reverse_gc	product_size
+9746.1:45-199	TTCGTCGAAGGACTGCAGAC	TGCAGTGCTTTCGAGACCAT	TGCAGTGCTTTCGAGACCAT	60.0	60.0	55	50	281
 ```
 
 ## License

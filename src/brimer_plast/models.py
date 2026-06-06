@@ -111,7 +111,7 @@ class ConservedExonChain:
     # Transcript naming metadata (set during chain construction)
     transcript_offset: int = 0  # bp from TSS to chain start in transcript mRNA
     representative_tid: str = ""  # transcript ID chosen for naming this chain
-    short_tid_length: int = 0  # L+2 for the whole gene
+    short_tid_length: int = 0  # L+4 for the whole gene (fifth-shortest)
 
     # Fallback flag: True when this chain was created because no conserved
     # exon-exon junctions could be found across transcripts of the gene.

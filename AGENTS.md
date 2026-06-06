@@ -5,8 +5,8 @@ This project is developed from scratch.
 ## Development principles
 
 - **Test-driven development.** Write the test first, then implement. Every `src/` module should have a corresponding test file. Run `pytest` frequently.
-- **Phase order is strict.** Do not skip ahead. Each phase depends on the previous one. If a phase isn't checked off in TODO.md, don't start it.
 - **Keep `CONTEXT.md` current.** When a new domain term enters the design, add it to the glossary.
+- **Keep README.md current.** When CLI flags, output format, or behavior changes, update the user-facing documentation.
 
 ## Dependencies
 
@@ -29,6 +29,13 @@ nix develop --command pytest tests/test_pipeline.py -v
 
 # Run a single test class or method
 nix develop --command pytest tests/test_pipeline.py::TestPipelineResult -v
+
+# Type-check with pyright (configured in pyproject.toml)
+nix develop --command pyright
+
+# Lint / format with ruff
+nix develop --command ruff check src/
+nix develop --command ruff format src/ --check
 ```
 
 Conda/mamba and its related tools are never allowed.
@@ -40,6 +47,39 @@ The production distribution is an **OCI image** (Dockerfile).
 - Build with: `docker build -t brimer-plast .`
 - The image bundles Python, primer3-py, and a compiled tnBLAST.
 - Users without Docker can install via `pip install .` if they have tnBLAST on PATH.
+
+## Module organization
+
+After a recent refactor, the monolithic `genome.py` and `cli.py` were split into focused modules:
+
+```
+src/brimer_plast/
+├── __init__.py        # package exports (ConservedExonChain, ExonInfo, PrimerPair)
+├── cli.py             # CLI entry point (typer), multi-target dispatch, --output-pdf
+├── diagram.py         # PDF genome-view diagram drawing
+├── filter.py          # tnBLAST result parsing and specificity filtering
+├── genome.py          # re-exports from gtf.py + sequence.py; conserved chain detection
+├── gtf.py             # GTF parsing (parse_gtf, build_transcript_to_gene_map)
+├── log_config.py      # logging configuration
+├── models.py          # data classes (ConservedExonChain, PrimerPair, ExonInfo, GeneLocus)
+├── pdf_report.py      # PDF report generation (reportlab)
+├── pipeline.py        # run_pipeline() — reusable core pipeline logic
+├── primer.py          # primer3-py wrapper, default constants
+├── sequence.py        # sequence extraction, coordinate conversion
+└── tnblast.py         # tnBLAST subprocess wrapper, assay file writer
+```
+
+### CLI features added since initial design
+
+- **Multi-target**: `--target-gene` and `--target-transcript` can be repeated:
+  `--target-gene GAPDH --target-gene ACTB`. Each target runs independently.
+- **PDF report**: `--output-pdf <path>` generates a PDF with genome views,
+  per-chain diagrams, and filtered pair tables.
+- **Pair naming**: Primer pairs are named `{short_tid}:{amplicon_start}-{amplicon_end}`
+  (e.g. `9746.1:45-199`) instead of `pair_1`.
+- **Fallback chains**: When no conserved exon-exon junctions exist across
+  transcripts, the pipeline creates per-transcript chains (flagged with
+  a user-visible warning).
 
 ## Integration tests
 
