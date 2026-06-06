@@ -20,6 +20,10 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Electron
+electron/node_modules/
+electron/out/
+
 # Outputs
 brimer_plast_*.pdf
 

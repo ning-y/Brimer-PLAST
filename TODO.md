@@ -240,7 +240,7 @@ for line in sys.stdin:
             result = run_pipeline(**req["params"])
             
             send({"id": rid, "status": "progress", "message": "Generating PDF report...", "pct": 90})
-            pdf_bytes = build_pdf_report(result)  # needs to accept PipelineResult → bytes
+            pdf_path = build_pdf_report(result, output_path=tmp_pdf_path)
             
             send({
                 "id": rid,
@@ -248,7 +248,7 @@ for line in sys.stdin:
                 "result": {
                     "filtered_pairs": [asdict(p) for p in result.filtered_pairs],
                     "warnings": result.warnings,
-                    "pdf_bytes_base64": base64.b64encode(pdf_bytes).decode(),
+                    "pdf_path": str(pdf_path),
                     "pdf_filename": f"brimer-plast_{req['params']['target_key']}_{datetime.now():%Y-%m-%d}.pdf",
                 }
             })
@@ -261,8 +261,8 @@ for line in sys.stdin:
 **Decision points**:
 - `build_pdf_report()` currently writes to a file path. Do we refactor it to
   return bytes? Or have the sidecar write to a temp path and return the path?
-  → **Recommendation**: refactor to return `bytes` so the Electron app can
-  trigger a browser download without touching the filesystem.
+  → **Decision**: sidecar writes to a temp file, returns the path. Simpler,
+  no refactor needed, avoids base64 overhead for multi-MB PDFs.
 
 - Progress reporting: `run_pipeline()` currently has no progress hook. We
   would need to add one (a callback or generator). Is this worth the
@@ -272,25 +272,15 @@ for line in sys.stdin:
 
 ### 1.2 — Refactor `build_pdf_report` to return bytes
 
-Current signature (from `pdf_report.py`):
-```python
-def build_pdf_report(
-    result: PipelineResult,
-    output_path: str | Path,
-    ...
-) -> None:
-```
+No refactor needed. The sidecar receives an output directory path from
+Electron (via the JSON params) and writes the PDF there. The directory
+is the platform-appropriate user data path:
+- macOS: `~/Library/Application Support/brimer-plast/reports/`
+- Windows: `%APPDATA%/brimer-plast/reports/`
 
-New signature:
-```python
-def build_pdf_report(
-    result: PipelineResult,
-    output_path: str | Path | None = None,
-    ...
-) -> bytes:
-```
-If `output_path` is None, render to a `BytesIO` buffer and return the bytes.
-If `output_path` is given, write to file (backward compatible).
+Electron's main process resolves this path and passes it to the sidecar
+in the `run_pipeline` params. The sidecar does not clean up — Electron
+owns the file for the download flow.
 
 ### 1.3 — PyInstaller bundle config
 
@@ -632,11 +622,15 @@ Tests are on the C. elegans genome already in `tests/fixtures/ce11/` (~42 MB).
 | 1 | Where does tnBLAST compile? | CI downloads upstream source, builds, discards | No submodule, no fork, no vendored code to maintain |
 | 2 | tnBLAST OpenMP? | Disabled | Single-threaded is fast enough; avoids macOS libomp dependency |
 | 3 | Progress reporting from run_pipeline? | Not yet — just a spinner | Adding a progress callback to run_pipeline() is a separate refactor |
-| 4 | PDF generation: file vs bytes? | Return bytes | Cleaner for Electron download flow |
-| 5 | Electron with vanilla HTML or React? | Vanilla HTML | No build step, no npm deps beyond electron itself |
-| 6 | GitHub Actions or self-hosted? | GitHub Actions free tier | No infrastructure to maintain |
-| 7 | Code signing for first release? | Skip | Distribute unsigned with instructions; add signing later |
-| 8 | macOS ARM or Intel only? | Both | GitHub provides ARM runners for free; no reason to exclude ARM users |
+| 4 | PDF delivery from sidecar to Electron | Sidecar writes to app data dir, returns path | Avoids base64 overhead; no refactor of build_pdf_report() |
+| 5 | Multi-target: one request per target or bulk? | One per target | Electron loops; simpler sidecar, per-target progress |
+| 6 | File validation before running pipeline? | No upfront validation | Let pipeline fail, surface error in UI. Add later if needed |
+| 7 | Electron GUI framework? | Vanilla HTML/JS | No build step. Add framework later if UI gets complex |
+| 8 | Sidecar binary path in dev vs prod | Auto-detect (fallback: python sidecar.py) | No flags or env vars needed |
+| 9 | App icon for first release? | Skip (use Electron default) | Not worth the time. Add branding later |
+| 10 | GitHub Actions or self-hosted? | GitHub Actions free tier | No infrastructure to maintain |
+| 11 | Code signing for first release? | Skip | Distribute unsigned with instructions; add signing later |
+| 12 | macOS ARM or Intel only? | Both | GitHub provides ARM runners for free; no reason to exclude ARM users |
 
 ---
 

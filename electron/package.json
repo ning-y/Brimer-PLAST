@@ -1,0 +1,32 @@
+{
+  "name": "brimer-plast",
+  "version": "0.1.0",
+  "description": "qRT-PCR primer design using primer3-py + tnBLAST",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "33.1.0",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "com.brimer-plast",
+    "productName": "Brimer-PLAST",
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.scientific-software"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "extraResources": [
+      {
+        "from": "../dist/pybrimer",
+        "to": "pybrimer"
+      }
+    ]
+  }
+}
