@@ -181,7 +181,7 @@ def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, ta
                 str(p.product_size)
             ])
 
-        cw = [CONTENT_WIDTH * x for x in [0.08, 0.06, 0.18, 0.07, 0.07, 0.18, 0.07, 0.07, 0.12]]
+        cw = [CONTENT_WIDTH * x for x in [0.08, 0.14, 0.18, 0.05, 0.05, 0.18, 0.05, 0.05, 0.10]]
         t = Table(data, colWidths=cw)
         t.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
