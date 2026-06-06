@@ -1,7 +1,7 @@
 """PDF report generation for Brimer-PLAST.
 
 Produces the primary design report with:
-1. Genome-view diagram (Overview + Zoom panes)
+1. Genome-view diagram (one per conserved exon chain)
 2. Primer pair table
 3. Technical record (full sequences and run parameters)
 
@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import sys
+from collections import defaultdict
 from datetime import datetime
 
 from reportlab.lib import colors
@@ -32,6 +33,8 @@ from brimer_plast.diagram import (
     TRANSCRIPT_CAP,
     _GeneDiagram,
     _SequenceRow,
+    compute_contributing_tids,
+    compute_zoom_bounds,
 )
 from brimer_plast.genome import exons_in_template_order, reverse_complement
 
@@ -71,18 +74,30 @@ def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, ta
             "<b>Color legend</b> - Blue: primer3-designed positions on the "
             "conserved exon chain (Panel A). Red: tnBLAST-verified genomic "
             "amplicon from the specificity screen, split by exon boundaries "
-            "(Panel B).",
+            "(Panel B).<br/>"
+            "<b>Transcript style</b> - Normal fill: transcript contributes to "
+            "this chain (its exons contain all chain exons). No fill, dashed: "
+            "transcript does not contribute — primers may not cover this isoform.",
             styles["Normal"],
         ),
         Spacer(1, 4),
     ]
 
-    if locus:
-        # Gene diagram draws primer pairs across multiple pages.  The
-        # number of pairs per page is computed dynamically from the
-        # available frame height so the diagram never overflows.
-        #
-        # Drawing geometry (from draw_gene_diagram trace):
+    if locus and chains:
+        # Group filtered_pairs by chain_id
+        pairs_by_chain: dict[str, list] = defaultdict(list)
+        for p in filtered_pairs:
+            pairs_by_chain[p.chain_id].append(p)
+
+        # Pre-compute per-chain data: contributing tids, zoom bounds
+        chain_data = []
+        for chain in chains:
+            contrib_tids = compute_contributing_tids(locus, chain)
+            c_pairs = pairs_by_chain.get(chain.id, [])
+            v_min, v_max = compute_zoom_bounds(locus, c_pairs, contrib_tids)
+            chain_data.append((chain, c_pairs, contrib_tids, v_min, v_max))
+
+        # Drawing geometry:
         #   base overhead = 82 + n_trans*11 pt (with "+N others" line)
         #                  = 74 + n_trans*11 pt (without "+N others")
         #   each pair     = 20 pt
@@ -90,36 +105,54 @@ def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, ta
         has_others = len(locus.transcripts) > TRANSCRIPT_CAP
         diagram_base_h = (82 if has_others else 74) + n_trans * 11
 
-        # Frame geometry: actual space inside ReportLab's frame
-        # (which adds 6pt internal padding, hence FRAME_H vs PAGE_HEIGHT).
-        # Overhead measured empirically — later pages have none.
+        # Frame geometry
         PAGE1_OVERHEAD = 138  # title, date, heading, legend, spacers
+        PER_CHAIN_OVERHEAD = 24  # "Chain:" subheading + spacer before each chain
 
         def _max_pairs(overhead: float) -> int:
             return max(1, int((FRAME_H - overhead - diagram_base_h) // 20))
 
         first_page_pairs = _max_pairs(PAGE1_OVERHEAD)
-        later_page_pairs = _max_pairs(0)  # full frame for page 2+
+        later_page_pairs = _max_pairs(0)
 
-        total = len(filtered_pairs)
-        page_start = 0
-        page_num = 0
-        while page_start < total:
-            cap = first_page_pairs if page_num == 0 else later_page_pairs
-            page_end = min(page_start + cap, total)
-            page_pairs = filtered_pairs[page_start:page_end]
-            n_pairs_this_page = len(page_pairs)
-            h = diagram_base_h + n_pairs_this_page * 20
-
-            if page_num > 0:
+        # ── Per-chain genome views ─────────────────────────────────────────
+        first_chain = True
+        for chain, c_pairs, contrib_tids, v_min, v_max in chain_data:
+            if not first_chain:
                 story.append(PageBreak())
+            first_chain = False
 
-            story.append(
-                _GeneDiagram(locus, page_pairs, chains, FRAME_W, h, target_transcript=target_transcript)
-            )
-            page_start = page_end
-            page_num += 1
+            # Chain subheading
+            story.append(Paragraph(f"Chain: {chain.id}", styles["Heading3"]))
+            story.append(Spacer(1, 4))
 
+            total = len(c_pairs)
+            page_start = 0
+            page_num = 0
+            while page_start < total or total == 0:
+                # total==0 means one empty-chain page
+                cap = first_page_pairs if page_num == 0 else later_page_pairs
+                page_end = min(page_start + cap, total) if total > 0 else 0
+                page_pairs = c_pairs[page_start:page_end] if total > 0 else []
+                n_pairs_this_page = len(page_pairs)
+                h = diagram_base_h + n_pairs_this_page * 20
+
+                if page_num > 0:
+                    story.append(PageBreak())
+
+                story.append(
+                    _GeneDiagram(
+                        locus, chain, page_pairs, contrib_tids, v_min, v_max,
+                        FRAME_W, h,
+                    )
+                )
+
+                if total == 0:
+                    break  # only one page for empty chain
+                page_start = page_end
+                page_num += 1
+
+    # ── 2. Filtered Primer Pairs ────────────────────────────────────────────
     story.append(PageBreak())
     story.append(Paragraph("2. Filtered Primer Pairs", styles["Heading2"]))
 
@@ -132,12 +165,13 @@ def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, ta
             fontName="Courier",
         )
 
-        data: list[list[str | Paragraph]] = [["Pair Name", "Forward", "Tm", "GC%", "Reverse", "Tm", "GC%", "Size"]]
+        data: list[list[str | Paragraph]] = [["Pair Name", "Chain", "Forward", "Tm", "GC%", "Reverse", "Tm", "GC%", "Size"]]
         for p in filtered_pairs:
             rc_rev = reverse_complement(p.reverse_seq or "")
             rev_p = Paragraph(f"&nbsp;{p.reverse_seq}<br/>({rc_rev})", table_cell_style)
             data.append([
                 p.pair_name or str(p.pair_number),
+                p.chain_id,
                 Paragraph(p.forward_seq or "", table_cell_style),
                 f"{p.forward_tm:.1f}",
                 f"{p.forward_gc:.0f}",
@@ -147,7 +181,7 @@ def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, ta
                 str(p.product_size)
             ])
 
-        cw = [CONTENT_WIDTH * x for x in [0.10, 0.20, 0.08, 0.08, 0.20, 0.08, 0.08, 0.18]]
+        cw = [CONTENT_WIDTH * x for x in [0.08, 0.06, 0.18, 0.07, 0.07, 0.18, 0.07, 0.07, 0.12]]
         t = Table(data, colWidths=cw)
         t.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
@@ -155,13 +189,12 @@ def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, ta
             ('FONTSIZE', (0,0), (-1,-1), 7),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
             ('LEFTPADDING', (0,0), (-1,-1), 2),
-            ('RIGHTPADDING', (0,0), (-1,-1), 2),
         ]))
         story.append(t)
     else:
          story.append(Paragraph("No primer pairs passed specificity filtering.", styles["Normal"]))
 
-    # ── Page 3: Run Information ──────────────────────────────────────────────
+    # ── 3. Run Information ──────────────────────────────────────────────────
     story.append(PageBreak())
     story.append(Paragraph("3. Run Information", styles["Heading2"]))
     story.append(Spacer(1, 10))
@@ -202,7 +235,7 @@ def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, ta
     for vl in ver_lines:
         story.append(Paragraph(vl, styles["Normal"]))
 
-    # ── Page 4+: Conserved Exon Chains ───────────────────────────────────────
+    # ── 4. Conserved Exon Chains ────────────────────────────────────────────
     if chains:
         story.append(PageBreak())
         story.append(Paragraph("4. Conserved Exon Chains", styles["Heading2"]))

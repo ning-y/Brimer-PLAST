@@ -3,7 +3,7 @@
 These tests verify that the genome-view diagram (``_GeneDiagram``) never
 exceeds the available page frame, a recurring crash::
 
-    Flowable <_GeneDiagram ...> too large on page … in frame 'normal' …
+    Flowable <_GeneDiagram …> too large on page … in frame 'normal' …
 
 The diagram height is now computed dynamically from the available frame
 geometry so this crash cannot re-occur.
@@ -25,6 +25,8 @@ from brimer_plast.diagram import (
     DIAGRAM_PAIR_CAP,
     TRANSCRIPT_CAP,
     _GeneDiagram,
+    compute_contributing_tids,
+    compute_zoom_bounds,
 )
 from brimer_plast.pdf_report import (
     FRAME_H,
@@ -54,12 +56,12 @@ def _locus_with_n_transcripts(n: int) -> GeneLocus:
     )
 
 
-def _n_dummy_pairs(n: int) -> list[PrimerPair]:
+def _n_dummy_pairs(n: int, chain_id: str = "test_chain_1") -> list[PrimerPair]:
     """Build *n* dummy ``PrimerPair`` objects with genomic fragments.
 
     Each pair has one forward fragment in exon 1 and one reverse fragment
-    in exon 3, so the zoom-range logic in ``draw_gene_diagram`` can
-    compute meaningful min/max coordinates.
+    in exon 3, so the zoom-range logic can compute meaningful min/max
+    coordinates.
     """
     pairs: list[PrimerPair] = []
     for i in range(n):
@@ -75,6 +77,8 @@ def _n_dummy_pairs(n: int) -> list[PrimerPair]:
                 forward_seq="AAA" * 7,
                 reverse_seq="TTT" * 7,
                 pair_number=i + 1,
+                pair_name=f"{chain_id}:{1_500+offset}-{5_220+offset}",
+                chain_id=chain_id,
                 primer3_forward_fragments=fwd_frags,
                 primer3_reverse_fragments=rev_frags,
                 tnblast_forward_fragments=fwd_frags,
@@ -198,8 +202,6 @@ class TestDiagramPageSizing:
         adds 8pt to the base height vs the uncapped case, reducing pair count."""
         capped = _max_pairs_for_page(TRANSCRIPT_CAP, TRANSCRIPT_CAP + 5, 0)
         uncapped = _max_pairs_for_page(TRANSCRIPT_CAP, TRANSCRIPT_CAP, 0)
-        # The "others" overhead is only 8pt, so it might not change the count
-        # (the int division by 20 is coarse).  Just verify it doesn't *increase*.
         assert capped <= uncapped, (
             f"capped ({capped}) should be ≤ uncapped ({uncapped})"
         )
@@ -209,6 +211,21 @@ class TestGeneDiagramFitsInFrame:
     """Direct verification that ``_GeneDiagram`` wrap() reports a height
     that does not exceed available frame space."""
 
+    def _make_diagram(self, n_pairs: int, available: float) -> tuple[_GeneDiagram, float]:
+        """Construct a ``_GeneDiagram`` for the given number of pairs."""
+        locus = _locus_with_n_transcripts(TRANSCRIPT_CAP)
+        chains = _chain_for_exons()
+        chain = chains[0]
+        pairs = _n_dummy_pairs(n_pairs)
+        contrib_tids = compute_contributing_tids(locus, chain)
+        v_min, v_max = compute_zoom_bounds(locus, pairs, contrib_tids)
+
+        base = _diagram_base_h(TRANSCRIPT_CAP, TRANSCRIPT_CAP)
+        h = base + n_pairs * PER_PAIR
+        diagram = _GeneDiagram(locus, chain, pairs, contrib_tids, v_min, v_max, 700, h)
+        _, reported_h = diagram.wrap(700, available)
+        return diagram, reported_h
+
     def test_diagram_at_limit_fits_on_page1(self):
         """A diagram sized for the max pairs that fit on page 1 must not
         overflow when wrap() is called with page1's remaining space."""
@@ -217,18 +234,9 @@ class TestGeneDiagramFitsInFrame:
             total_transcripts=TRANSCRIPT_CAP,
             overhead=PAGE1_OVERHEAD,
         )
-        locus = _locus_with_n_transcripts(TRANSCRIPT_CAP)
-        pairs = _n_dummy_pairs(n_pairs)
-        chains = _chain_for_exons()
-
-        base = _diagram_base_h(TRANSCRIPT_CAP, TRANSCRIPT_CAP)
-        h = base + n_pairs * PER_PAIR
         available = FRAME_H - PAGE1_OVERHEAD
-
-        diagram = _GeneDiagram(locus, pairs, chains, 700, h)
-        _, reported_h = diagram.wrap(700, available)
-
-        assert reported_h <= available + 1, (  # +1 for float tolerance
+        _, reported_h = self._make_diagram(n_pairs, available)
+        assert reported_h <= available + 1, (
             f"Height {reported_h:.0f}pt exceeds available {available:.0f}pt"
         )
 
@@ -240,17 +248,8 @@ class TestGeneDiagramFitsInFrame:
             total_transcripts=TRANSCRIPT_CAP,
             overhead=0,
         )
-        locus = _locus_with_n_transcripts(TRANSCRIPT_CAP)
-        pairs = _n_dummy_pairs(n_pairs)
-        chains = _chain_for_exons()
-
-        base = _diagram_base_h(TRANSCRIPT_CAP, TRANSCRIPT_CAP)
-        h = base + n_pairs * PER_PAIR
         available = FRAME_H
-
-        diagram = _GeneDiagram(locus, pairs, chains, 700, h)
-        _, reported_h = diagram.wrap(700, available)
-
+        _, reported_h = self._make_diagram(n_pairs, available)
         assert reported_h <= available + 1, (
             f"Height {reported_h:.0f}pt exceeds available {available:.0f}pt"
         )
@@ -263,26 +262,30 @@ class TestGeneDiagramYPosition:
 
     def test_lowest_drawn_pixel_is_above_zero(self):
         """With max pairs that fit on a later page (full frame), the lowest
-        pixel actually drawn on canvas (the last pair's Panel B rect) must
-        be ≥ 0.  The return value of draw_gene_diagram (curr_y - 5) is a
+        pixel actually drawn on canvas must be ≥ 0.
+
+        The return value of draw_gene_diagram (curr_y - 5) is a
         bookkeeping variable that routinely goes negative — it is NOT the
-        bottommost coordinate touched by drawing calls."""
+        bottommost coordinate touched by drawing calls.
+        """
         n_pairs = _max_pairs_for_page(
             n_transcripts=TRANSCRIPT_CAP,
             total_transcripts=TRANSCRIPT_CAP,
             overhead=0,
         )
         locus = _locus_with_n_transcripts(TRANSCRIPT_CAP)
-        pairs = _n_dummy_pairs(n_pairs)
         chains = _chain_for_exons()
+        chain = chains[0]
+        pairs = _n_dummy_pairs(n_pairs)
+        contrib_tids = compute_contributing_tids(locus, chain)
+        # compute_zoom_bounds uses the pairs, so it returns a tighter zoom
+        v_min, v_max = compute_zoom_bounds(locus, pairs, contrib_tids)
 
         base = _diagram_base_h(TRANSCRIPT_CAP, TRANSCRIPT_CAP)
         height = base + n_pairs * PER_PAIR
         top_y = height - 30  # where _GeneDiagram.draw() starts
 
         # Trace the y descent to find the lowest pixel drawn.
-        # The lowest element on canvas is the last pair's Panel B rect
-        # which draws at y = curr_y - 1 (at the start of that iteration).
         over_y = top_y - 15                           # OVERVIEW_H
         zoom_top_y = over_y - 25
         curr_y = zoom_top_y - 8 - 5                   # EXON_HEIGHT=8, gap=5
@@ -299,3 +302,92 @@ class TestGeneDiagramYPosition:
             f"Lowest drawn pixel ({lowest_pixel:.0f}pt) went below zero "
             f"(n_pairs={n_pairs}, height={height:.0f}, top_y={top_y:.0f})"
         )
+
+
+class TestContributingTids:
+    """compute_contributing_tids correctly identifies transcripts that
+    contain all exons in a chain."""
+
+    def test_all_transcripts_contribute(self):
+        """When all transcripts share the same exon structure, all contribute."""
+        locus = _locus_with_n_transcripts(5)
+        chain = _chain_for_exons()[0]
+        tids = compute_contributing_tids(locus, chain)
+        assert len(tids) == 5, f"Expected 5 contributing tids, got {len(tids)}"
+
+    def test_none_contributes_for_empty_chain(self):
+        """A chain whose exons are absent from all transcripts has zero
+        contributing transcripts."""
+        locus = _locus_with_n_transcripts(3)
+        chain = ConservedExonChain(
+            id="orphan_chain",
+            exons=[
+                ExonInfo(seqid="chr2", start=9_000, end=10_000, strand="+"),
+            ],
+            template="A" * 1_000,
+        )
+        tids = compute_contributing_tids(locus, chain)
+        assert len(tids) == 0
+
+    def test_some_contribute_some_dont(self):
+        """When a subset of transcripts contains the chain's exons, only
+        those are returned."""
+        transcripts: dict[str, list[ExonInfo]] = {
+            "has_exons": [
+                ExonInfo(seqid="chr1", start=1_000, end=2_000, strand="+"),
+                ExonInfo(seqid="chr1", start=3_000, end=4_000, strand="+"),
+            ],
+            "missing_exon": [
+                ExonInfo(seqid="chr1", start=1_000, end=2_000, strand="+"),
+            ],
+        }
+        locus = GeneLocus(
+            gene_name="test", seqid="chr1", strand="+",
+            transcripts=transcripts, min_start=1_000, max_end=4_000,
+        )
+        chain = ConservedExonChain(
+            id="test_chain",
+            exons=[
+                ExonInfo(seqid="chr1", start=1_000, end=2_000, strand="+"),
+                ExonInfo(seqid="chr1", start=3_000, end=4_000, strand="+"),
+            ],
+            template="A" * 2_000,
+        )
+        tids = compute_contributing_tids(locus, chain)
+        assert "has_exons" in tids
+        assert "missing_exon" not in tids
+        assert len(tids) == 1
+
+
+class TestZoomBounds:
+    """compute_zoom_bounds returns sensible zoom ranges."""
+
+    def test_with_pairs_zooms_to_pairs(self):
+        """When pairs exist, zoom is centred on the pair fragment coords."""
+        locus = _locus_with_n_transcripts(3)
+        chain = _chain_for_exons()[0]
+        contrib_tids = compute_contributing_tids(locus, chain)
+        pairs = _n_dummy_pairs(1)
+        v_min, v_max = compute_zoom_bounds(locus, pairs, contrib_tids)
+        # The pair has fragments at ~1500 and ~5200; after padding this
+        # should be inside the gene range (1000-6000)
+        assert 1000 <= v_min < 5000
+        assert 2000 < v_max <= 6000
+
+    def test_empty_pairs_falls_back_to_contrib_exons(self):
+        """With no pairs, zoom uses the exon range of contributing transcripts."""
+        locus = _locus_with_n_transcripts(3)
+        chain = _chain_for_exons()[0]
+        contrib_tids = compute_contributing_tids(locus, chain)
+        v_min, v_max = compute_zoom_bounds(locus, [], contrib_tids)
+        # Contributing exons span 1000-6000; after padding this should
+        # stay within the gene range
+        assert v_min >= locus.min_start
+        assert v_max <= locus.max_end
+
+    def test_no_pairs_no_contributors_uses_gene_range(self):
+        """With empty pairs and no contributors, fall back to full gene range."""
+        locus = _locus_with_n_transcripts(3)
+        v_min, v_max = compute_zoom_bounds(locus, [], set())
+        assert v_min == locus.min_start
+        assert v_max == locus.max_end

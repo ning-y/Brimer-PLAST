@@ -231,6 +231,29 @@ mRNA 5'→3' order (TSS = position 1). Added to template-relative
 amplicon coordinates to produce transcript-relative coordinates.
 Stored on ``ConservedExonChain.transcript_offset``.
 
+**Contributing transcript**:
+For a given conserved exon chain, a transcript whose exon set (by genomic
+start/end coordinates) contains every exon in the chain. In that chain's
+genome view, contributing transcripts are drawn with normal fill and solid
+stroke.
+_Avoid_: Active transcript, relevant transcript
+
+**Non-contributing transcript**:
+For a given conserved exon chain, a transcript whose exon set does NOT
+contain every exon in the chain. In that chain's genome view,
+non-contributing transcripts are drawn with no fill, dashed exon borders,
+and dashed intron arrows to clearly distinguish them from the contributing
+transcripts.
+_Avoid_: Irrelevant transcript, inactive transcript
+
+**Per-chain genome view**:
+One genome view per conserved exon chain in the PDF report, rather than one
+view for the whole target. Each per-chain view shows all transcripts of the
+gene (colored by contribution status) and only the primer pairs designed
+from that specific chain. Chains with zero filtered pairs still show an
+explicit message. Per-chain views are concatenated in flat order (Option A).
+_Avoid_: Single-view report, combined view
+
 ## Example dialogue
 
 **Dev**: I ran Brimer-PLAST on the mouse genome targeting the GAPDH gene. It returned a primer set of 12 specificity-filtered primer pairs.
