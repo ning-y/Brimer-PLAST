@@ -1,14 +1,9 @@
 name: Build tnBLAST
 
-# ────────────────────────────────────────────────────────────────────
-# Phase 0 — Cross-compile tnBLAST for macOS (Intel + ARM) and Windows.
-# Run on every push to main, or manually from the GitHub web UI.
-# ────────────────────────────────────────────────────────────────────
-
 on:
   push:
     branches: [main]
-  workflow_dispatch:      # lets you trigger from github.com with one click
+  workflow_dispatch:
 
 jobs:
   build:
@@ -23,11 +18,14 @@ jobs:
             label: Windows (x86_64)
 
     runs-on: ${{ matrix.os }}
-    # A human-readable name on the GitHub Actions page
     name: Build tnBLAST on ${{ matrix.label }}
 
+    defaults:
+      run:
+        # Use bash on all runners, including Windows
+        shell: bash
+
     steps:
-      # ── Download tnBLAST source ─────────────────────────────────
       - name: Download tnBLAST source (v2.77)
         run: |
           curl -sL -o tnblast.tar.gz \
@@ -44,6 +42,7 @@ jobs:
             CC=clang++ \
             FLAGS="-O3 -Wall -std=c++14" \
             LIBS="-lm -lz" \
+            OPENMP= \
             -j$(sysctl -n hw.logicalcpu)
 
       # ── Windows build (MSYS2 / MinGW) ───────────────────────────
@@ -55,6 +54,16 @@ jobs:
           install: >-
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-make
+
+      - name: Patch source for MinGW (remove custom min() ambiguous with std::min)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          cd tnblast-src
+          # Remove legacy min/max templates meant for MSVC < 6.0.
+          # They conflict with std::min/std::max on modern GCC/MinGW.
+          sed -i '/^template <class A>$/,/^}$/d' nuc_cruc.h
 
       - name: Compile tnBLAST (Windows via MSYS2)
         if: runner.os == 'Windows'
@@ -63,47 +72,49 @@ jobs:
           cd tnblast-src
           mingw32-make \
             CC=g++ \
-            FLAGS="-O3 -Wall -std=c++14" \
-            LIBS="-lm -lz"
+            FLAGS="-O3 -Wall -std=c++14 -include stdint.h" \
+            LIBS="-lm -lz" \
+            OPENMP=
 
-      # ── Veriﬁcation ─────────────────────────────────────────────
-      - name: Check binary exists and is executable
+      # ── Verification ───────────────────────────────────────────
+      - name: Check binary exists
         run: |
-          FILE=$(ls tnblast-src/tntblast* 2>/dev/null | head -1)
+          FILE=
+          for f in tnblast-src/tntblast.exe tnblast-src/tntblast; do
+            if [ -f "$f" ]; then
+              FILE="$f"
+              break
+            fi
+          done
           if [ -z "$FILE" ]; then
-            echo "❌ No tnBLAST binary found in tnblast-src/"
+            echo "FAIL: No tnBLAST binary found"
+            ls tnblast-src/
             exit 1
           fi
-          echo "✅ Found binary: $FILE"
+          echo "OK: Found $FILE"
           echo "BINARY_PATH=$FILE" >> "$GITHUB_ENV"
 
-      - name: Show file type (macOS)
+      - name: Show file type (macOS only)
         if: runner.os == 'macOS'
         run: file -b "$BINARY_PATH"
 
-      - name: Print --help
-        run: "$BINARY_PATH" --help 2>&1 | head -8
-
-      - name: Smoke test — run tnBLAST on a tiny FASTA
+      # Smoke test validates the binary works, so no separate version check needed
+      - name: Smoke test on tiny FASTA
         run: |
-          cd tnblast-src
-          # Create a 32 bp "genome"
           printf '>chr1\nACGTACGTACGTACGTACGTACGTACGTACGT\n' > /tmp/test.fa
-          # Create one primer pair
           printf 'test_pair\tACGTACGTACGTACGTACGT\tACGTACGTACGTACGTACGT\n' > /tmp/test.assay
-          # Search for amplicons
-          ./tntblast* -i /tmp/test.assay -d /tmp/test.fa -o /tmp/test.out \
+          "$BINARY_PATH" -i /tmp/test.assay -d /tmp/test.fa -o /tmp/test.out \
             -l 100 -e 55 -x 65
-          echo "──── tnBLAST output ────"
+          echo "==== tnBLAST output ===="
           cat /tmp/test.out
-          echo "───────────────────────"
-          if grep -q 'amplicon range' /tmp/test.out; then
-            echo "✅ Smoke test passed — amplicon found"
+          echo "========================"
+          if grep -q 'amplicon' /tmp/test.out; then
+            echo "OK: Smoke test passed"
           else
-            echo "⚠️  No amplicon found (this may be expected for this tiny test)"
+            echo "WARN: No amplicon found (may be expected for this tiny input)"
           fi
 
-      # ── Upload artifact ──────────────────────────────────────────
+      # ── Upload ─────────────────────────────────────────────────
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
