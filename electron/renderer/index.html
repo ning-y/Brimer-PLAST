@@ -14,13 +14,13 @@
   </div>
 
   <!-- File pickers (global) -->
-  <label style="font-weight:600;font-size:0.8em;display:block;margin-top:4px;color:var(--label);">Genome FASTA</label>
+  <label class="global-file-label">Genome FASTA</label>
   <div class="file-row">
     <button id="genome-btn">Browse…</button>
     <span class="path" id="genome-path">No file selected</span>
   </div>
 
-  <label style="font-weight:600;font-size:0.8em;display:block;margin-top:4px;color:var(--label);">GTF Annotation</label>
+  <label class="global-file-label">GTF Annotation</label>
   <div class="file-row">
     <button id="gtf-btn">Browse…</button>
     <span class="path" id="gtf-path">No file selected</span>
@@ -46,8 +46,8 @@
   </table>
 
   <!-- PDF opener fallback (if no result-link is visible) -->
-  <div id="global-pdf-area" style="margin-top:8px;display:none;">
-    <a id="global-pdf-link" href="#" style="font-size:0.85em;">Open PDF report</a>
+  <div id="global-pdf-area">
+    <a id="global-pdf-link" href="#">Open PDF report</a>
   </div>
 </div>
 

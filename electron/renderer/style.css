@@ -83,6 +83,12 @@ body {
 }
 #theme-toggle:hover { background: var(--toggle-hover); }
 
+/* ── File labels ─────────────────────── */
+.global-file-label {
+  font-weight: 600; font-size: 0.8em; display: block; margin-top: 4px;
+  color: var(--label);
+}
+
 /* ── File pickers (global) ───────────── */
 .file-row {
   display: flex; align-items: center; gap: 8px; margin-top: 3px;
@@ -186,3 +192,11 @@ col.col-results { width: auto; }
   word-break: break-word; pointer-events: none;
 }
 .result-cell .error-msg:hover .error-tooltip { display: block; }
+
+/* ── Global PDF link ──────────────────── */
+#global-pdf-area {
+  margin-top: 8px;
+}
+#global-pdf-link {
+  font-size: 0.85em;
+}
