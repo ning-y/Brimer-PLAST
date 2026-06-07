@@ -38,6 +38,25 @@ nix develop --command ruff check src/
 nix develop --command ruff format src/ --check
 ```
 
+### Electron JS/HTML checks
+
+**Before committing any change to `electron/`, run the JS syntax check:**
+
+```bash
+node --check electron/main.js
+node --check electron/preload.js
+node -e "
+  const fs = require('fs');
+  const html = fs.readFileSync('electron/renderer/index.html', 'utf8');
+  const m = html.match(/<script>([\s\S]*?)<\/script>/);
+  if (!m) { console.error('No <script> tag found in index.html'); process.exit(1); }
+  new Function(m[1]);
+  console.log('Render JS syntax OK');
+"
+```
+
+This catches corrupted or invalid JavaScript before a bad file gets committed (the same type of corruption that `sed` can accidentally introduce).
+
 Conda/mamba and its related tools are never allowed.
 
 ## Production packaging

@@ -102,6 +102,13 @@ function cancelAllForEvent(event) {
   }
 }
 
+function killAllSidecars() {
+  for (const [, entry] of pendingRequests) {
+    entry.process.kill();
+  }
+  pendingRequests.clear();
+}
+
 // ── Window ─────────────────────────────────────────────────────────
 function createWindow() {
   const win = new BrowserWindow({
@@ -115,6 +122,10 @@ function createWindow() {
   });
 
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+
+  // Kill all sidecar processes when the window is closed (catches macOS where
+  // window-all-closed does not quit the app).
+  win.on('closed', killAllSidecars);
 }
 
 // ── IPC handlers ───────────────────────────────────────────────────
@@ -154,13 +165,9 @@ app.whenReady().then(() => {
   });
 
   app.on('window-all-closed', () => {
+    killAllSidecars();
     if (process.platform !== 'darwin') app.quit();
   });
 
-  app.on('before-quit', () => {
-    for (const [, entry] of pendingRequests) {
-      entry.process.kill();
-    }
-    pendingRequests.clear();
-  });
+  app.on('before-quit', killAllSidecars);
 });

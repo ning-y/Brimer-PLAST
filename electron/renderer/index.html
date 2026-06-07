@@ -7,6 +7,14 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <!-- Error overlay (shown by JS on fatal init errors) -->
+  <div id="fatal-error" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#f5f5f5; z-index:9999; padding:40px; font-family:sans-serif;">
+    <h2 style="color:#b22; margin-top:0;">Something went wrong</h2>
+    <p style="color:#333; font-size:14px;">The application failed to start. Please report this error:</p>
+    <pre id="fatal-error-msg" style="background:#eee; padding:12px; border:1px solid #ccc; border-radius:4px; color:#b22; font-size:13px; overflow:auto; max-height:60%;"></pre>
+    <p style="font-size:12px; color:#666;">After reporting, restart the application.</p>
+  </div>
+
 <div class="container">
   <div class="header-row">
     <h1>Brimer-PLAST</h1>
@@ -51,6 +59,31 @@
   </div>
 </div>
 
-<script src="renderer.js"></script>
+  <script src="renderer.js"></script>
+
+  <!-- Fatal error catcher: catches errors that happen before or during renderer.js -->
+  <script>
+  window.showFatalError = function (msg, stack) {
+    var el = document.getElementById('fatal-error');
+    var msgEl = document.getElementById('fatal-error-msg');
+    if (el && msgEl) {
+      msgEl.textContent = (msg || 'Unknown error') + (stack ? '\n\n' + stack : '');
+      el.style.display = 'block';
+    }
+  };
+  window.onerror = function (msg, url, line, col, err) {
+    window.showFatalError(
+      (err && err.message) || msg,
+      (err && err.stack) || (line && 'at ' + url + ':' + line + ':' + col)
+    );
+    return true;
+  };
+  window.addEventListener('unhandledrejection', function (e) {
+    window.showFatalError(
+      (e.reason && e.reason.message) || String(e.reason),
+      e.reason && e.reason.stack
+    );
+  });
+  </script>
 </body>
 </html>

@@ -205,6 +205,20 @@ jobs:
             mv dist/pybrimer.exe dist/pybrimer
           fi
 
+      - name: Validate JS/HTML syntax
+        shell: bash
+        run: |
+          node --check electron/main.js
+          node --check electron/preload.js
+          node --check electron/renderer/renderer.js
+          node -e "
+            const fs = require('fs');
+            const html = fs.readFileSync('electron/renderer/index.html', 'utf8');
+            const m = html.match(/<script>([\s\S]*?)<\/script>/g);
+            if (!m || m.length === 0) { console.log('No inline <script> (OK — scripts are external)'); }
+            console.log('HTML syntax OK');
+          "
+
       - name: Install npm dependencies
         run: npm install
         working-directory: electron

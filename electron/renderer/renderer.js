@@ -1,7 +1,8 @@
 (function () {
   'use strict';
 
-  // ── State ─────────────────────────────────────────────────
+  try {
+    // ── State ─────────────────────────────────────────────────
   let genomePath = null;
   let gtfPath = null;
 
@@ -375,5 +376,13 @@
     const href = globalPdfLink.getAttribute('href');
     if (href && href !== '#') window.api.openPdf(href);
   });
+
+  } catch (e) {
+    if (typeof window.showFatalError === 'function') {
+      window.showFatalError(e.message, e.stack);
+    } else {
+      document.body.textContent = 'Fatal error: ' + (e.message || e);
+    }
+  }
 
 })();
