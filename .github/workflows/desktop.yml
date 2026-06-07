@@ -11,9 +11,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: macos-13
-            label: macOS Intel
-            shell: bash
           - os: macos-14
             label: macOS ARM
             shell: bash
@@ -113,8 +110,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: macos-13
-            label: macOS Intel
           - os: macos-14
             label: macOS ARM
           - os: windows-latest
@@ -144,6 +139,7 @@ jobs:
           path: tntblast-bin/
 
       - name: Build PyInstaller bundle
+        shell: bash
         run: |
           TNT=$(ls tntblast-bin/tntblast* | head -1)
           pyinstaller \
@@ -153,6 +149,7 @@ jobs:
             sidecar.py
 
       - name: Verify bundle
+        shell: bash
         run: |
           ls -lh dist/pybrimer*
           echo '{"id":1,"command":"unknown","params":{}}' | timeout 5 ./dist/pybrimer* 2>/dev/null && echo "OK"
@@ -170,10 +167,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: macos-13
-            label: macOS Intel
-            builder-flag: --mac --x64
-            artifact-glob: '*.dmg'
           - os: macos-14
             label: macOS ARM
             builder-flag: --mac --arm64

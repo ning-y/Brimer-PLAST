@@ -345,7 +345,7 @@ The `tntblast` binary is placed next to the Python bundle, accessible via
 }
 ```
 
-### 2.2 — `electron/main.js` (~100 lines)
+### 2.2 — `electron/main.js` (~100 lines) — COMPLETED
 
 Responsibilities:
 1. Create a `BrowserWindow` (900×700, no devtools in production)
@@ -365,7 +365,7 @@ wakes it up. This is fine.
 exit, log the error, and show a dialog. It should NOT auto-restart (that
 could cause confusing duplicate runs).
 
-### 2.3 — `electron/preload.js` (~20 lines)
+### 2.3 — `electron/preload.js` (~20 lines) — COMPLETED
 
 ```javascript
 const { contextBridge, ipcRenderer } = require('electron');
@@ -375,7 +375,7 @@ contextBridge.exposeInMainWorld('api', {
 });
 ```
 
-### 2.4 — `electron/renderer/index.html` (~350 lines)
+### 2.4 — `electron/renderer/index.html` (~350 lines) — COMPLETED
 
 Vanilla HTML + JS. No React, no build step.
 

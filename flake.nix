@@ -9,7 +9,14 @@
   outputs = { self, nixpkgs, flake-utils }:
     flake-utils.lib.eachDefaultSystem (system:
       let
-        pkgs = import nixpkgs { inherit system; };
+        pkgs = import nixpkgs {
+          inherit system;
+          config = {
+            permittedInsecurePackages = [
+              "electron-33.4.11"
+            ];
+          };
+        };
 
         # Custom tnBLAST derivation (minimal build, no MPI, no NCBI toolkit)
         tntblast = pkgs.stdenv.mkDerivation rec {
@@ -79,6 +86,8 @@
             pkgs.ruff
             pkgs.pyright
             pkgs.python312Packages.pip
+            pkgs.nodejs
+            pkgs.electron_33
           ];
 
           shellHook = ''

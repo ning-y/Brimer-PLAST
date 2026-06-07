@@ -59,6 +59,15 @@ Output options:
   `-vv` for per-pair fragment-list details and template coordinates.
 - `--tsv` — Tab-separated machine-readable output
 
+## Electron Desktop App (Beta)
+
+Brimer-PLAST includes an experimental Electron-based desktop GUI.
+
+To run in development (requires Nix):
+```bash
+nix develop --command bash -c "cd electron && electron . --no-sandbox"
+```
+
 ## How it works
 
 1. **Parse annotations** — Reads the GTF file, groups exons by `transcript_id`.
