@@ -145,6 +145,7 @@ jobs:
           pyinstaller \
             --onefile \
             --name pybrimer \
+            --collect-all primer3 \
             --add-binary "$TNT:." \
             sidecar.py
 
