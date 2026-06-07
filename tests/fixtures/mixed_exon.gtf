@@ -1,0 +1,3 @@
+chrI	TEST	exon	101	250	.	+	.	gene_id "mixed_gene"; gene_name "mixed_gene"; transcript_id "transcript_A";
+chrI	TEST	exon	301	450	.	+	.	gene_id "mixed_gene"; gene_name "mixed_gene"; transcript_id "transcript_A";
+chrI	TEST	exon	101	250	.	+	.	gene_id "mixed_gene"; gene_name "mixed_gene"; transcript_id "transcript_B";

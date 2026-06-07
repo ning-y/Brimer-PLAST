@@ -1,0 +1,14 @@
+chrI	TEST	exon	101	250	.	+	.	gene_id "multi_test_gene"; gene_name "multi_test_gene"; transcript_id "transcript_A";
+chrI	TEST	exon	301	450	.	+	.	gene_id "multi_test_gene"; gene_name "multi_test_gene"; transcript_id "transcript_A";
+chrI	TEST	exon	501	650	.	+	.	gene_id "multi_test_gene"; gene_name "multi_test_gene"; transcript_id "transcript_A";
+chrI	TEST	exon	701	800	.	+	.	gene_id "multi_test_gene"; gene_name "multi_test_gene"; transcript_id "transcript_A";
+chrI	TEST	exon	901	1000	.	+	.	gene_id "multi_test_gene"; gene_name "multi_test_gene"; transcript_id "transcript_A";
+chrI	TEST	exon	101	250	.	+	.	gene_id "multi_test_gene"; gene_name "multi_test_gene"; transcript_id "transcript_B";
+chrI	TEST	exon	301	450	.	+	.	gene_id "multi_test_gene"; gene_name "multi_test_gene"; transcript_id "transcript_B";
+chrI	TEST	exon	701	800	.	+	.	gene_id "multi_test_gene"; gene_name "multi_test_gene"; transcript_id "transcript_B";
+chrI	TEST	exon	901	1000	.	+	.	gene_id "multi_test_gene"; gene_name "multi_test_gene"; transcript_id "transcript_B";
+chrI	TEST	exon	101	250	.	+	.	gene_id "multi_test_gene"; gene_name "multi_test_gene"; transcript_id "transcript_C";
+chrI	TEST	exon	301	450	.	+	.	gene_id "multi_test_gene"; gene_name "multi_test_gene"; transcript_id "transcript_C";
+chrI	TEST	exon	501	650	.	+	.	gene_id "multi_test_gene"; gene_name "multi_test_gene"; transcript_id "transcript_C";
+chrI	TEST	exon	701	800	.	+	.	gene_id "multi_test_gene"; gene_name "multi_test_gene"; transcript_id "transcript_C";
+chrI	TEST	exon	901	1000	.	+	.	gene_id "multi_test_gene"; gene_name "multi_test_gene"; transcript_id "transcript_C";

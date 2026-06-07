@@ -34,5 +34,7 @@ brimer_plast_*.pdf
 *.gtf.gz
 
 # But keep the synthetic fixtures committed
-!/tests/fixtures/mini_genome.fa
-!/tests/fixtures/mini_genome.gtf
+!/tests/fixtures/*.fa
+!/tests/fixtures/*.gtf
+!/tests/fixtures/*.fai
+/tests/fixtures/ce11/

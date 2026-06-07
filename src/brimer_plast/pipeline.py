@@ -315,17 +315,19 @@ def run_pipeline(
         # Filter junction-mode pairs (require 0 genomic hits)
         filtered_junction = filter_specific_pairs(
             junction_candidates,
-            genome_counts,
+            genome_amplicons,
             transcriptome_targets,
             target_gene=resolved_gene,
+            target_locus=locus,
             junction_mode=True,
         )
-        # Filter intron-mode pairs (expect 1 genomic hit — the target)
+        # Filter intron-mode pairs (expect genomic hits to be on-target)
         filtered_intron = filter_specific_pairs(
             intron_candidates,
-            genome_counts,
+            genome_amplicons,
             transcriptome_targets,
             target_gene=resolved_gene,
+            target_locus=locus,
             junction_mode=False,
         )
 

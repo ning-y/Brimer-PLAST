@@ -4,12 +4,18 @@ import pytest
 
 from brimer_plast.filter import filter_specific_pairs
 from brimer_plast.tnblast import (
+    AmpliconHit,
     _parse_tnblast_amplicons,
     _parse_tnblast_output,
     run_tnblast,
     write_assay_file,
 )
-from brimer_plast.models import PrimerPair
+from brimer_plast.models import PrimerPair, GeneLocus
+
+
+def _hit_list(count: int, seqid: str = "chrI", start: int = 100, end: int = 200):
+    """Helper to create a list of mock AmpliconHits."""
+    return [AmpliconHit(seqid=seqid, amplicon_start=start, amplicon_end=end) for _ in range(count)]
 
 
 class TestWriteAssayFile:
@@ -226,7 +232,7 @@ class TestFilterSpecificPairs:
         """Junction mode: gc=0, all transcriptome hits on target should pass."""
         pairs = [PrimerPair(forward_seq="F1", reverse_seq="R1", pair_name="p1")]
         result = filter_specific_pairs(
-            pairs, {"p1": 0}, {"p1": ["target_gene"]},
+            pairs, {"p1": []}, {"p1": ["target_gene"]},
             target_gene="target_gene",
         )
         assert len(result) == 1
@@ -236,7 +242,7 @@ class TestFilterSpecificPairs:
         """Junction mode: gc=1 should fail (expected gc=0)."""
         pairs = [PrimerPair(forward_seq="F1", reverse_seq="R1", pair_name="p1")]
         result = filter_specific_pairs(
-            pairs, {"p1": 1}, {"p1": ["target_gene"]},
+            pairs, {"p1": _hit_list(1)}, {"p1": ["target_gene"]},
             target_gene="target_gene",
         )
         assert len(result) == 0
@@ -245,7 +251,7 @@ class TestFilterSpecificPairs:
         """Junction mode: no hits should fail."""
         pairs = [PrimerPair(forward_seq="F1", reverse_seq="R1", pair_name="p1")]
         result = filter_specific_pairs(
-            pairs, {"p1": 0}, {},
+            pairs, {"p1": []}, {},
             target_gene="target_gene", junction_mode=True,
         )
         assert len(result) == 0
@@ -254,7 +260,7 @@ class TestFilterSpecificPairs:
         """Transcriptome hits on a different gene should fail."""
         pairs = [PrimerPair(forward_seq="F1", reverse_seq="R1", pair_name="p1")]
         result = filter_specific_pairs(
-            pairs, {"p1": 0}, {"p1": ["other_gene"]},
+            pairs, {"p1": []}, {"p1": ["other_gene"]},
             target_gene="target_gene", junction_mode=True,
         )
         assert len(result) == 0
@@ -263,7 +269,7 @@ class TestFilterSpecificPairs:
         """Multiple transcriptome hits on the same target gene should pass."""
         pairs = [PrimerPair(forward_seq="F1", reverse_seq="R1", pair_name="p1")]
         result = filter_specific_pairs(
-            pairs, {"p1": 0}, {"p1": ["IL1B", "IL1B"]},
+            pairs, {"p1": []}, {"p1": ["IL1B", "IL1B"]},
             target_gene="IL1B", junction_mode=True,
         )
         assert len(result) == 1
@@ -273,7 +279,7 @@ class TestFilterSpecificPairs:
         pairs = [PrimerPair(forward_seq="F1", reverse_seq="R1", pair_name="p1")]
         result = filter_specific_pairs(
             pairs,
-            {"p1": 1},
+            {"p1": _hit_list(1)},
             {"p1": ["target_gene"]},
             target_gene="target_gene",
             junction_mode=False,
@@ -281,17 +287,52 @@ class TestFilterSpecificPairs:
         assert len(result) == 1
         assert result[0] == pairs[0]
 
-    def test_non_junction_mode_gc0_tc1_fails(self):
-        """Non-junction mode: gc=0 should fail (expected gc=1)."""
+    def test_non_junction_mode_gc0_tc1_passes(self):
+        """Non-junction mode: gc=0 should PASS (it means the intron is very large)."""
         pairs = [PrimerPair(forward_seq="F1", reverse_seq="R1", pair_name="p1")]
         result = filter_specific_pairs(
             pairs,
-            {"p1": 0},
+            {"p1": []},
             {"p1": ["target_gene"]},
             target_gene="target_gene",
             junction_mode=False,
         )
+        assert len(result) == 1
+        assert result[0] == pairs[0]
+
+    def test_non_junction_mode_off_locus_fails(self):
+        """Non-junction mode: a hit on a different chromosome should fail."""
+        pairs = [PrimerPair(forward_seq="F1", reverse_seq="R1", pair_name="p1")]
+        locus = GeneLocus("target_gene", "chrI", "+", {}, 1000, 2000)
+        
+        # Hit on chrII
+        hits = [AmpliconHit(seqid="chrII", amplicon_start=1500, amplicon_end=1600)]
+        result = filter_specific_pairs(
+            pairs,
+            {"p1": hits},
+            {"p1": ["target_gene"]},
+            target_gene="target_gene",
+            target_locus=locus,
+            junction_mode=False,
+        )
         assert len(result) == 0
+
+    def test_non_junction_mode_on_locus_passes(self):
+        """Non-junction mode: a hit on the target chromosome and range should pass."""
+        pairs = [PrimerPair(forward_seq="F1", reverse_seq="R1", pair_name="p1")]
+        locus = GeneLocus("target_gene", "chrI", "+", {}, 1000, 2000)
+        
+        # Hit inside locus (with 1000bp padding)
+        hits = [AmpliconHit(seqid="chrI", amplicon_start=1500, amplicon_end=1600)]
+        result = filter_specific_pairs(
+            pairs,
+            {"p1": hits},
+            {"p1": ["target_gene"]},
+            target_gene="target_gene",
+            target_locus=locus,
+            junction_mode=False,
+        )
+        assert len(result) == 1
 
     def test_junction_mode_mixed_pairs(self):
         """Multiple pairs with mixed results."""
@@ -303,7 +344,12 @@ class TestFilterSpecificPairs:
         ]
         result = filter_specific_pairs(
             pairs,
-            {"p1": 0, "p2": 1, "p3": 0, "p4": 0},
+            {
+                "p1": [],
+                "p2": _hit_list(1),
+                "p3": [],
+                "p4": [],
+            },
             {"p1": ["target_gene"], "p4": ["target_gene", "target_gene"]},
             target_gene="target_gene",
             junction_mode=True,

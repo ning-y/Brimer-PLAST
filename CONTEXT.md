@@ -102,12 +102,17 @@ the cDNA (antisense strand) during PCR. In the spliced template, it is always
 _Avoid_: Right primer, antisense primer
 
 **Specificity-filtered primer pair**:
-A candidate primer pair that survived tnBLAST's screen — i.e., no off-target
-amplicons were predicted at the given annealing temperature.
+A candidate primer pair that survived tnBLAST's screen. For junction-spanning
+primers (Mode A), this means zero predicted amplicons in the genome. For
+intron-spanning primers (Mode B), this means zero off-target amplicons;
+genomic amplification is permitted only if it occurs at the intended target
+gene locus. In both modes, all transcriptome hits must map to the target gene.
 _Avoid_: Good primers, clean primers
 
 **Off-target amplification**:
 An amplicon predicted by tnBLAST at a locus other than the intended target gene.
+For Mode A, any genomic hit is an off-target. For Mode B, any genomic hit
+outside the target gene's chromosome and coordinate range is an off-target.
 The presence of off-target amplification disqualifies a candidate primer pair.
 _Avoid_: Non-specific binding, cross-reactivity
 
