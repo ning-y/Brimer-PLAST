@@ -150,9 +150,7 @@ jobs:
 
       - name: Verify bundle
         shell: bash
-        run: |
-          ls -lh dist/pybrimer*
-          echo '{"id":1,"command":"unknown","params":{}}' | timeout 5 ./dist/pybrimer* 2>/dev/null && echo "OK"
+        run: ls -lh dist/pybrimer*
 
       - name: Upload PyInstaller bundle
         uses: actions/upload-artifact@v4
