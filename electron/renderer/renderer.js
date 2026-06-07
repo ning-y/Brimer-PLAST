@@ -3,8 +3,8 @@
 
   try {
     // ── State ─────────────────────────────────────────────────
-  let genomePath = null;
-  let gtfPath = null;
+  let genomePath = (() => { try { return localStorage.getItem('brimer-genome-path'); } catch (e) { return null; } })();
+  let gtfPath = (() => { try { return localStorage.getItem('brimer-gtf-path'); } catch (e) { return null; } })();
 
   const GENE_PLACEHOLDER  = 'e.g. LTBP4';
   const TRANS_PLACEHOLDER = 'e.g. ENST00000204005';
@@ -12,23 +12,49 @@
   // Active running requests: requestId -> rowIndex
   const runningMap = new Map();
 
+  // Hardcoded defaults for highlight comparison
+  const DEFAULTS = {
+    'product-min': 80,
+    'product-max': 200,
+    'opt-tm': 60,
+    'min-tm': 57,
+    'max-tm': 63,
+    'opt-size': 20,
+    'min-size': 18,
+    'max-size': 25,
+    'min-gc': 40,
+    'max-gc': 60,
+    'num-return': 50,
+    'max-amplicon': 2000,
+  };
+
   // ── DOM refs ──────────────────────────────────────────────
   const genomeBtn = document.getElementById('genome-btn');
   const genomePathEl = document.getElementById('genome-path');
   const gtfBtn = document.getElementById('gtf-btn');
   const gtfPathEl = document.getElementById('gtf-path');
   const targetsBody = document.getElementById('targets-body');
-  const globalPdfArea = document.getElementById('global-pdf-area');
-  const globalPdfLink = document.getElementById('global-pdf-link');
+
+  // Load saved paths into UI
+  if (genomePath) genomePathEl.textContent = genomePath;
+  if (gtfPath) gtfPathEl.textContent = gtfPath;
 
   // ── File pickers ─────────────────────────────────────────
   genomeBtn.addEventListener('click', async () => {
     const path = await window.api.selectFasta();
-    if (path) { genomePath = path; genomePathEl.textContent = path; }
+    if (path) { 
+      genomePath = path; 
+      genomePathEl.textContent = path;
+      try { localStorage.setItem('brimer-genome-path', path); } catch (e) { /* ignore */ }
+    }
   });
   gtfBtn.addEventListener('click', async () => {
     const path = await window.api.selectGtf();
-    if (path) { gtfPath = path; gtfPathEl.textContent = path; }
+    if (path) { 
+      gtfPath = path; 
+      gtfPathEl.textContent = path;
+      try { localStorage.setItem('brimer-gtf-path', path); } catch (e) { /* ignore */ }
+    }
   });
 
   // ── Create a row ─────────────────────────────────────────
@@ -50,7 +76,7 @@
     const tdName = document.createElement('td');
     const inp = document.createElement('input');
     inp.type = 'text';
-    inp.className = 'target-name';
+    inp.className = 'target-name is-gene';
     inp.placeholder = GENE_PLACEHOLDER;
     tdName.appendChild(inp);
 
@@ -67,21 +93,35 @@
     panel.className = 'params-panel';
     panel.innerHTML = `
       <div class="params-grid">
-        <label>Product min <input class="pp" data-key="product-min" type="number" value="80"></label>
-        <label>Product max <input class="pp" data-key="product-max" type="number" value="200"></label>
-        <label>Opt Tm (°C) <input class="pp" data-key="opt-tm" type="number" value="60" step="0.1"></label>
-        <label>Min Tm (°C) <input class="pp" data-key="min-tm" type="number" value="57" step="0.1"></label>
-        <label>Max Tm (°C) <input class="pp" data-key="max-tm" type="number" value="63" step="0.1"></label>
-        <label>Opt length <input class="pp" data-key="opt-size" type="number" value="20"></label>
-        <label>Min length <input class="pp" data-key="min-size" type="number" value="18"></label>
-        <label>Max length <input class="pp" data-key="max-size" type="number" value="25"></label>
-        <label>Min GC% <input class="pp" data-key="min-gc" type="number" value="40"></label>
-        <label>Max GC% <input class="pp" data-key="max-gc" type="number" value="60"></label>
-        <label>Pairs/chain <input class="pp" data-key="num-return" type="number" value="50"></label>
-        <label>Max amplicon <input class="pp" data-key="max-amplicon" type="number" value="2000"></label>
+        <label>Product min <input class="pp" data-key="product-min" type="number" value="${DEFAULTS['product-min']}"></label>
+        <label>Product max <input class="pp" data-key="product-max" type="number" value="${DEFAULTS['product-max']}"></label>
+        <label>Opt Tm (°C) <input class="pp" data-key="opt-tm" type="number" value="${DEFAULTS['opt-tm']}" step="0.1"></label>
+        <label>Min Tm (°C) <input class="pp" data-key="min-tm" type="number" value="${DEFAULTS['min-tm']}" step="0.1"></label>
+        <label>Max Tm (°C) <input class="pp" data-key="max-tm" type="number" value="${DEFAULTS['max-tm']}" step="0.1"></label>
+        <label>Opt length <input class="pp" data-key="opt-size" type="number" value="${DEFAULTS['opt-size']}"></label>
+        <label>Min length <input class="pp" data-key="min-size" type="number" value="${DEFAULTS['min-size']}"></label>
+        <label>Max length <input class="pp" data-key="max-size" type="number" value="${DEFAULTS['max-size']}"></label>
+        <label>Min GC% <input class="pp" data-key="min-gc" type="number" value="${DEFAULTS['min-gc']}"></label>
+        <label>Max GC% <input class="pp" data-key="max-gc" type="number" value="${DEFAULTS['max-gc']}"></label>
+        <label>Pairs/chain <input class="pp" data-key="num-return" type="number" value="${DEFAULTS['num-return']}"></label>
+        <label>Max amplicon <input class="pp" data-key="max-amplicon" type="number" value="${DEFAULTS['max-amplicon']}"></label>
       </div>
     `;
     tdParams.appendChild(panel);
+
+    const inputs = panel.querySelectorAll('.pp');
+    function updateHighlights() {
+      let anyChanged = false;
+      inputs.forEach(inpEl => {
+        const key = inpEl.dataset.key;
+        const val = parseFloat(inpEl.value);
+        const isChanged = !isNaN(val) && val !== DEFAULTS[key];
+        inpEl.classList.toggle('highlighted', isChanged);
+        if (isChanged) anyChanged = true;
+      });
+      toggleBtn.classList.toggle('highlighted', anyChanged);
+    }
+    inputs.forEach(inpEl => inpEl.addEventListener('input', updateHighlights));
 
     toggleBtn.addEventListener('click', () => {
       const open = panel.classList.toggle('open');
@@ -138,7 +178,9 @@
 
     // ── Placeholder switching ───────────────────────
     sel.addEventListener('change', () => {
-      inp.placeholder = sel.value === 'gene' ? GENE_PLACEHOLDER : TRANS_PLACEHOLDER;
+      const isGene = sel.value === 'gene';
+      inp.placeholder = isGene ? GENE_PLACEHOLDER : TRANS_PLACEHOLDER;
+      inp.classList.toggle('is-gene', isGene);
     });
 
     // ── Tab navigation ─────────────────────────────
@@ -178,16 +220,12 @@
         if (idx < tabbables.length - 1) {
           tabbables[idx + 1].focus();
         } else {
-          // Last field: go to next row or add new row
+          // Last field: go to next row
           const nextRow = tr.nextElementSibling;
           if (nextRow) {
             const nextTabbables = getRowTabbables(nextRow);
             if (nextTabbables.length > 0) nextTabbables[0].focus();
             else nextRow.querySelector('.target-type')?.focus();
-          } else {
-            // Add a new row and focus its first field
-            const newRow = createRow();
-            newRow.querySelector('.target-type').focus();
           }
         }
       }
@@ -201,9 +239,18 @@
       const name = inp.value.trim();
       if (!name) { showRowError(tr, 'Enter a target name.'); return; }
 
+      // Lock row inputs forever
+      sel.disabled = true;
+      inp.readOnly = true;
+      panel.querySelectorAll('input').forEach(el => el.disabled = true);
+
+      // Spawn new row if this is the last one
+      if (!tr.nextElementSibling) {
+        createRow();
+      }
+
       clearRowState(tr);
-      runBtn.disabled = true;
-      runBtn.textContent = 'Running…';
+      runBtn.style.display = 'none';
       statusEl.style.display = 'block';
       statusEl.textContent = 'Starting…';
 
@@ -251,8 +298,6 @@
         const result = await promise;
         runningMap.delete(requestId);
 
-        runBtn.disabled = false;
-        runBtn.textContent = 'Run';
         statusEl.style.display = 'none';
 
         const count = result.filtered_pairs ? result.filtered_pairs.length : 0;
@@ -273,8 +318,6 @@
         }
       } catch (err) {
         runningMap.delete(requestId);
-        runBtn.disabled = false;
-        runBtn.textContent = 'Run';
         statusEl.style.display = 'none';
         showRowError(tr, err.message);
       }
@@ -327,9 +370,7 @@
     const row = runningMap.get(data._requestId);
     if (!row) return;
     runningMap.delete(data._requestId);
-    const runBtn = row.querySelector('.run-btn');
     const statusEl = row.querySelector('.status-text');
-    if (runBtn) { runBtn.disabled = false; runBtn.textContent = 'Run'; }
     if (statusEl) statusEl.style.display = 'none';
     showRowError(row, data.message || 'Unknown error');
   });
@@ -369,14 +410,6 @@
 
   // ── Initial row ──────────────────────────────────────────
   createRow().querySelector('.target-type').focus();
-
-  // ── Global PDF link ──────────────────────────────────────
-  globalPdfLink.addEventListener('click', (e) => {
-    e.preventDefault();
-    const href = globalPdfLink.getAttribute('href');
-    if (href && href !== '#') window.api.openPdf(href);
-  });
-
   } catch (e) {
     if (typeof window.showFatalError === 'function') {
       window.showFatalError(e.message, e.stack);

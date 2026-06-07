@@ -26,6 +26,8 @@
   --error-text: #b22;
   --error-tooltip-bg: #333;
   --error-tooltip-text: #fff;
+  --highlight-bg: #fff9c4;
+  --highlight-text: #222;
   --file-btn-bg: #fff;
   --file-btn-border: #bbb;
   --file-btn-hover: #eee;
@@ -58,6 +60,8 @@
   --error-text: #f38ba8;
   --error-tooltip-bg: #45475a;
   --error-tooltip-text: #cdd6f4;
+  --highlight-bg: #f9e2af;
+  --highlight-text: #1e1e2e;
   --file-btn-bg: #313244;
   --file-btn-border: #45475a;
   --file-btn-hover: #45475a;
@@ -91,7 +95,7 @@ body {
 
 /* ── File pickers (global) ───────────── */
 .file-row {
-  display: flex; align-items: center; gap: 8px; margin-top: 3px;
+  display: flex; align-items: center; gap: 8px; margin-top: 3px; margin-bottom: 15px;
 }
 .file-row button {
   white-space: nowrap; padding: 4px 14px; font-size: 0.85em;
@@ -111,30 +115,34 @@ body {
 }
 #targets-table thead th {
   background: var(--th-bg); font-weight: 600; font-size: 0.82em;
-  border: 1px solid var(--th-border); padding: 5px 6px; text-align: left;
+  border: 1px solid var(--th-border); padding: 8px 6px; text-align: left;
   position: sticky; top: 0; z-index: 1; color: var(--text);
+  vertical-align: middle;
 }
 #targets-table tbody td {
-  border: 1px solid var(--table-border); padding: 4px 6px; vertical-align: top;
+  border: 1px solid var(--table-border);
+  padding: 8px 6px;
+  vertical-align: middle;
 }
 col.col-target  { width: 90px; }
 col.col-name    { width: 140px; }
-col.col-params  { width: 50px; }
+col.col-params  { width: 65px; }
 col.col-results { width: auto; }
 
 /* Target type dropdown */
 .target-type {
-  width: 100%; font-size: 0.9em; padding: 3px 4px;
+  width: 100%; font-size: 0.9em; padding: 4px; display: block;
   border: 1px solid var(--input-border); border-radius: 3px; background: var(--input-bg);
   color: var(--text);
 }
 
 /* Name input */
 .target-name {
-  width: 100%; font-size: 0.9em; padding: 3px 6px;
+  width: 100%; font-size: 0.9em; padding: 4px 6px; display: block;
   border: 1px solid var(--input-border); border-radius: 3px;
   background: var(--input-bg); color: var(--text);
 }
+.target-name.is-gene { font-style: italic; }
 
 /* ── Per-row optional params ─────────── */
 .params-toggle {
@@ -142,7 +150,11 @@ col.col-results { width: auto; }
   background: var(--toggle-bg); border: 1px solid var(--toggle-border); border-radius: 3px;
   padding: 2px 6px; text-align: center; display: inline-block; color: var(--text);
 }
-.params-toggle:hover { background: var(--toggle-hover); }
+.params-toggle.highlighted {
+  background: var(--highlight-bg);
+  color: var(--highlight-text);
+  border-color: var(--highlight-bg);
+}
 .params-panel {
   display: none; position: absolute; z-index: 10;
   left: 0; top: 100%; margin-top: 2px;
@@ -162,6 +174,11 @@ col.col-results { width: auto; }
   width: 60px; padding: 2px 4px; font-size: 0.9em;
   border: 1px solid var(--params-grid-input-border); border-radius: 3px;
   background: var(--input-bg); color: var(--text);
+}
+.params-grid input.highlighted {
+  background: var(--highlight-bg);
+  color: var(--highlight-text);
+  border-color: var(--highlight-bg);
 }
 .td-params { position: relative; }
 
@@ -192,11 +209,3 @@ col.col-results { width: auto; }
   word-break: break-word; pointer-events: none;
 }
 .result-cell .error-msg:hover .error-tooltip { display: block; }
-
-/* ── Global PDF link ──────────────────── */
-#global-pdf-area {
-  margin-top: 8px;
-}
-#global-pdf-link {
-  font-size: 0.85em;
-}
