@@ -11,7 +11,7 @@ import os
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from brimer_plast.filter import filter_specific_pairs
 from brimer_plast.tnblast import AmpliconHit, _parse_tnblast_amplicons, run_tnblast, write_assay_file
@@ -116,6 +116,7 @@ def run_pipeline(
     target_type: str,  # "gene" or "transcript"
     primer_args: dict[str, Any],
     max_amplicon: int = 2000,
+    progress_callback: Callable[[int, str], None] | None = None,
 ) -> PipelineResult:
     """Run the full Brimer-PLAST design + filter pipeline for one target.
 
@@ -130,6 +131,8 @@ def run_pipeline(
         target_type: ``"gene"`` or ``"transcript"``.
         primer_args: primer3 global args (merged over defaults).
         max_amplicon: Maximum tnBLAST amplicon search length.
+        progress_callback: Optional ``(pct, message)`` called during
+            long-running stages.  ``pct`` is an integer 0-100.
 
     Returns:
         A :class:`PipelineResult` with chains, filtered pairs, etc.
@@ -141,10 +144,15 @@ def run_pipeline(
     """
     log = logging.getLogger("brimer_plast.pipeline")
 
+    def _report(pct: int, msg: str) -> None:
+        if progress_callback:
+            progress_callback(pct, msg)
+
     target_gene = target_key if target_type == "gene" else None
     target_transcript = target_key if target_type == "transcript" else None
 
     # ── Step 1: Extract conserved exon chains ──────────────────────────────
+    _report(10, "Parsing genome and annotations...")
     chains = get_target_information(
         fasta_path=genome,
         gtf_path=annotations,
@@ -188,6 +196,7 @@ def run_pipeline(
 
     log.info("Found %d conserved exon chain(s) (%d multi-exon, %d single-exon)",
               len(chains), len(multi_exon_chains), len(single_exon_chains))
+    _report(20, f"Designing primers for {len(multi_exon_chains)} chain(s)...")
 
     # ── Step 2: Design candidate primers (dual-mode) ──────────────────────
     log.info("Designing primers with primer3 (junction + intron modes)...")
@@ -239,6 +248,7 @@ def run_pipeline(
 
     log.info("Total: %d candidate pair(s) (%d junction, %d intron).",
               len(all_flat_pairs), len(junction_candidates), len(intron_candidates))
+    _report(40, f"Primer design complete: {len(all_flat_pairs)} candidate pair(s)")
 
     # ── Step 2.5: Compute pair names ───────────────────────────────────────
     chain_map = {c.id: c for c in chains}
@@ -263,6 +273,7 @@ def run_pipeline(
         assay_path = os.path.join(tmp_dir, "assays.txt")
         write_assay_file(all_flat_pairs, assay_path)
 
+        _report(50, "Building transcriptome FASTA...")
         transcriptome_path = os.path.join(tmp_dir, "transcriptome.fa")
         transcript_exon_map = build_transcriptome_fasta(
             genome, annotations, transcriptome_path
@@ -270,6 +281,7 @@ def run_pipeline(
 
         try:
             genome_out = os.path.join(tmp_dir, "tntblast_genome.txt")
+            _report(60, "Scanning genome with tnBLAST...")
             genome_counts = run_tnblast(
                 assay_path,
                 genome,
@@ -280,6 +292,7 @@ def run_pipeline(
             )
             transcriptome_out = os.path.join(tmp_dir, "tntblast_transcriptome.txt")
             log.info("  tnBLAST genome scan complete")
+            _report(70, "Scanning transcriptome with tnBLAST...")
             run_tnblast(
                 assay_path,
                 transcriptome_path,
@@ -291,6 +304,8 @@ def run_pipeline(
             log.info("  tnBLAST transcriptome scan complete")
         except (RuntimeError, FileNotFoundError):
             raise
+
+        _report(80, "Filtering results...")
 
         genome_amplicons = _parse_tnblast_amplicons(genome_out)
         transcriptome_amplicons = _parse_tnblast_amplicons(transcriptome_out)
@@ -369,6 +384,8 @@ def run_pipeline(
         log.warning("No primer pairs passed tnBLAST specificity filter.")
     else:
         log.info("%d/%d pairs passed filtering.", len(filtered), len(all_flat_pairs))
+
+    _report(95, "Processing results...")
 
     return PipelineResult(
         chains=chains,

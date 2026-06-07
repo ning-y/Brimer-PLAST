@@ -61,6 +61,9 @@ def handle_run_pipeline(rid: int, params: dict) -> None:
             target_type=target_type,
             primer_args=primer_args,
             max_amplicon=max_amplicon,
+            progress_callback=lambda pct, msg: send(
+                {"id": rid, "status": "progress", "message": msg, "pct": pct}
+            ),
         )
     except ValueError as e:
         send({"id": rid, "status": "error", "message": str(e)})
