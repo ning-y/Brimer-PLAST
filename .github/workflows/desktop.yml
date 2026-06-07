@@ -210,6 +210,10 @@ jobs:
             exit 1
           fi
 
+      - name: Ensure sidecar is executable
+        shell: bash
+        run: chmod +x "dist/${{ matrix.sidecar-name }}"
+
       - name: Validate JS/HTML syntax
         shell: bash
         run: |

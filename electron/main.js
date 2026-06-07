@@ -13,10 +13,18 @@ function findSidecar() {
   const prodPathExe = path.join(process.resourcesPath, 'pybrimer.exe');
   const prodPath = path.join(process.resourcesPath, 'pybrimer');
 
+  let binPath = null;
   if (process.platform === 'win32') {
-    if (fs.existsSync(prodPathExe)) return prodPathExe;
+    if (fs.existsSync(prodPathExe)) binPath = prodPathExe;
   } else {
-    if (fs.existsSync(prodPath)) return prodPath;
+    if (fs.existsSync(prodPath)) binPath = prodPath;
+  }
+
+  if (binPath) {
+    try {
+      fs.chmodSync(binPath, 0o755);
+    } catch (_) { /* best-effort; may fail on read-only fs */ }
+    return binPath;
   }
 
   const devPath = path.join(__dirname, '..', 'sidecar.py');
