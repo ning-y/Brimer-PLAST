@@ -199,6 +199,7 @@ jobs:
           path: dist/
 
       - name: Normalize PyInstaller bundle name
+        shell: bash
         run: |
           if [ -f dist/pybrimer.exe ]; then
             mv dist/pybrimer.exe dist/pybrimer
