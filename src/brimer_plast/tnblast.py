@@ -7,10 +7,30 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+
+
+def _get_tntblast_path() -> str:
+    """Determine the path to the tntblast executable.
+
+    Priority:
+    1. If running inside a PyInstaller bundle, look in the bundle directory.
+    2. Otherwise, check if 'tntblast' is on the system PATH.
+    """
+    exe_name = "tntblast.exe" if os.name == "nt" else "tntblast"
+
+    # 1. Check PyInstaller bundle directory (sys._MEIPASS)
+    if hasattr(sys, "_MEIPASS"):
+        bundled_path = os.path.join(sys._MEIPASS, exe_name)
+        if os.path.exists(bundled_path):
+            return bundled_path
+
+    # 2. Fall back to system PATH
+    return exe_name
 
 
 def write_assay_file(
@@ -71,7 +91,7 @@ def run_tnblast(
 
     try:
         cmd = [
-            "tntblast",
+            _get_tntblast_path(),
             "-i",
             str(assay_path),
             "-d",

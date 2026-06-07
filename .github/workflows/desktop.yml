@@ -169,14 +169,17 @@ jobs:
             label: macOS ARM
             builder-flag: --mac --arm64
             artifact-glob: '*.dmg'
+            sidecar-name: pybrimer
           - os: windows-latest
             label: Windows
             builder-flag: --win
             artifact-glob: '*.exe'
+            sidecar-name: pybrimer.exe
           - os: ubuntu-24.04
             label: Linux
             builder-flag: --linux AppImage
             artifact-glob: '*.AppImage'
+            sidecar-name: pybrimer
     runs-on: ${{ matrix.os }}
     name: Electron — ${{ matrix.label }}
 
@@ -198,11 +201,13 @@ jobs:
           name: pybrimer-${{ runner.os }}
           path: dist/
 
-      - name: Normalize PyInstaller bundle name
+      - name: Validate bundle exists
         shell: bash
         run: |
-          if [ -f dist/pybrimer.exe ]; then
-            mv dist/pybrimer.exe dist/pybrimer
+          if [ ! -f "dist/${{ matrix.sidecar-name }}" ]; then
+            echo "Expected sidecar dist/${{ matrix.sidecar-name }} not found!"
+            ls -R dist/
+            exit 1
           fi
 
       - name: Validate JS/HTML syntax

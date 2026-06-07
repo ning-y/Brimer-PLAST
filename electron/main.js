@@ -10,9 +10,15 @@ const pendingRequests = new Map();
 let nextId = 1;
 
 function findSidecar() {
+  const prodPathExe = path.join(process.resourcesPath, 'pybrimer.exe');
   const prodPath = path.join(process.resourcesPath, 'pybrimer');
-  if (fs.existsSync(prodPath)) return prodPath;
-  if (fs.existsSync(prodPath + '.exe')) return prodPath + '.exe';
+
+  if (process.platform === 'win32') {
+    if (fs.existsSync(prodPathExe)) return prodPathExe;
+  } else {
+    if (fs.existsSync(prodPath)) return prodPath;
+  }
+
   const devPath = path.join(__dirname, '..', 'sidecar.py');
   if (fs.existsSync(devPath)) return { command: 'python3', args: [devPath] };
   return { command: 'python', args: [devPath] };

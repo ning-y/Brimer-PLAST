@@ -5,27 +5,31 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build:mac": "electron-builder --mac",
-    "build:win": "electron-builder --win"
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac"
   },
   "devDependencies": {
     "electron": "33.1.0",
     "electron-builder": "25.1.8"
   },
   "build": {
-    "appId": "com.brimer-plast",
     "productName": "Brimer-PLAST",
+    "appId": "com.brimer-plast",
+    "win": {
+      "target": "nsis"
+    },
     "mac": {
       "target": "dmg",
       "category": "public.app-category.scientific-software"
-    },
-    "win": {
-      "target": "nsis"
     },
     "extraResources": [
       {
         "from": "../dist/pybrimer",
         "to": "pybrimer"
+      },
+      {
+        "from": "../dist/pybrimer.exe",
+        "to": "pybrimer.exe"
       }
     ]
   }
