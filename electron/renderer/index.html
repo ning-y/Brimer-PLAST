@@ -5,13 +5,90 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Brimer-PLAST</title>
 <style>
+  /* ── Theming (CSS custom properties) ─── */
+  :root {
+    --bg: #f5f5f5;
+    --text: #222;
+    --heading: #333;
+    --label: #444;
+    --input-bg: #fff;
+    --input-border: #bbb;
+    --table-border: #ddd;
+    --th-bg: #e8e8e8;
+    --th-border: #ccc;
+    --btn-bg: #2a7de1;
+    --btn-hover: #1a6bc9;
+    --btn-disabled: #999;
+    --toggle-bg: #eee;
+    --toggle-border: #ccc;
+    --toggle-hover: #ddd;
+    --panel-bg: #fff;
+    --panel-border: #bbb;
+    --panel-shadow: rgba(0,0,0,0.12);
+    --params-grid-label: #555;
+    --params-grid-input-border: #ccc;
+    --status-text: #555;
+    --result-link: #2a7de1;
+    --result-link-hover: #1a6bc9;
+    --error-text: #b22;
+    --error-tooltip-bg: #333;
+    --error-tooltip-text: #fff;
+    --file-btn-bg: #fff;
+    --file-btn-border: #bbb;
+    --file-btn-hover: #eee;
+    --path-text: #666;
+  }
+  [data-theme="dark"] {
+    --bg: #1e1e2e;
+    --text: #cdd6f4;
+    --heading: #cdd6f4;
+    --label: #a6adc8;
+    --input-bg: #313244;
+    --input-border: #45475a;
+    --table-border: #45475a;
+    --th-bg: #313244;
+    --th-border: #45475a;
+    --btn-bg: #89b4fa;
+    --btn-hover: #74c7ec;
+    --btn-disabled: #585b70;
+    --toggle-bg: #313244;
+    --toggle-border: #45475a;
+    --toggle-hover: #45475a;
+    --panel-bg: #313244;
+    --panel-border: #45475a;
+    --panel-shadow: rgba(0,0,0,0.4);
+    --params-grid-label: #a6adc8;
+    --params-grid-input-border: #585b70;
+    --status-text: #a6adc8;
+    --result-link: #89b4fa;
+    --result-link-hover: #74c7ec;
+    --error-text: #f38ba8;
+    --error-tooltip-bg: #45475a;
+    --error-tooltip-text: #cdd6f4;
+    --file-btn-bg: #313244;
+    --file-btn-border: #45475a;
+    --file-btn-hover: #45475a;
+    --path-text: #6c7086;
+  }
   *, *::before, *::after { box-sizing: border-box; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    margin: 0; padding: 16px 20px; background: #f5f5f5; color: #222;
+    margin: 0; padding: 16px 20px; background: var(--bg); color: var(--text);
     font-size: 14px;
   }
   .container { max-width: 900px; margin: 0 auto; }
+
+  /* ── Header row ──────────────────────── */
+  .header-row {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;
+  }
+  .header-row h1 { font-size: 1.2em; margin: 0; color: var(--heading); }
+  #theme-toggle {
+    background: var(--toggle-bg); border: 1px solid var(--toggle-border);
+    border-radius: 4px; padding: 3px 8px; font-size: 0.9em; cursor: pointer;
+    color: var(--text); line-height: 1.4;
+  }
+  #theme-toggle:hover { background: var(--toggle-hover); }
 
   /* ── File pickers (global) ───────────── */
   .file-row {
@@ -19,11 +96,12 @@
   }
   .file-row button {
     white-space: nowrap; padding: 4px 14px; font-size: 0.85em;
-    background: #fff; border: 1px solid #bbb; border-radius: 4px; cursor: pointer;
+    background: var(--file-btn-bg); border: 1px solid var(--file-btn-border); border-radius: 4px; cursor: pointer;
+    color: var(--text);
   }
-  .file-row button:hover { background: #eee; }
+  .file-row button:hover { background: var(--file-btn-hover); }
   .file-row .path {
-    font-size: 0.82em; color: #666; overflow: hidden; text-overflow: ellipsis;
+    font-size: 0.82em; color: var(--path-text); overflow: hidden; text-overflow: ellipsis;
     white-space: nowrap; flex: 1;
   }
 
@@ -33,12 +111,12 @@
     table-layout: fixed;
   }
   #targets-table thead th {
-    background: #e8e8e8; font-weight: 600; font-size: 0.82em;
-    border: 1px solid #ccc; padding: 5px 6px; text-align: left;
-    position: sticky; top: 0; z-index: 1;
+    background: var(--th-bg); font-weight: 600; font-size: 0.82em;
+    border: 1px solid var(--th-border); padding: 5px 6px; text-align: left;
+    position: sticky; top: 0; z-index: 1; color: var(--text);
   }
   #targets-table tbody td {
-    border: 1px solid #ddd; padding: 4px 6px; vertical-align: top;
+    border: 1px solid var(--table-border); padding: 4px 6px; vertical-align: top;
   }
   col.col-target  { width: 90px; }
   col.col-name    { width: 140px; }
@@ -48,27 +126,29 @@
   /* Target type dropdown */
   .target-type {
     width: 100%; font-size: 0.9em; padding: 3px 4px;
-    border: 1px solid #bbb; border-radius: 3px; background: #fff;
+    border: 1px solid var(--input-border); border-radius: 3px; background: var(--input-bg);
+    color: var(--text);
   }
 
   /* Name input */
   .target-name {
     width: 100%; font-size: 0.9em; padding: 3px 6px;
-    border: 1px solid #bbb; border-radius: 3px;
+    border: 1px solid var(--input-border); border-radius: 3px;
+    background: var(--input-bg); color: var(--text);
   }
 
   /* ── Per-row optional params ─────────── */
   .params-toggle {
     cursor: pointer; user-select: none; font-size: 0.85em;
-    background: #eee; border: 1px solid #ccc; border-radius: 3px;
-    padding: 2px 6px; text-align: center; display: inline-block;
+    background: var(--toggle-bg); border: 1px solid var(--toggle-border); border-radius: 3px;
+    padding: 2px 6px; text-align: center; display: inline-block; color: var(--text);
   }
-  .params-toggle:hover { background: #ddd; }
+  .params-toggle:hover { background: var(--toggle-hover); }
   .params-panel {
     display: none; position: absolute; z-index: 10;
     left: 0; top: 100%; margin-top: 2px;
-    background: #fff; border: 1px solid #bbb; border-radius: 4px;
-    padding: 8px 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 4px;
+    padding: 8px 10px; box-shadow: 0 2px 8px var(--panel-shadow);
     width: 380px;
   }
   .params-panel.open { display: block; }
@@ -76,12 +156,13 @@
     display: grid; grid-template-columns: 1fr 1fr; gap: 5px 12px;
   }
   .params-grid label {
-    font-weight: normal; font-size: 0.75em; color: #555; margin: 0;
+    font-weight: normal; font-size: 0.75em; color: var(--params-grid-label); margin: 0;
     display: flex; align-items: center; gap: 4px;
   }
   .params-grid input {
     width: 60px; padding: 2px 4px; font-size: 0.9em;
-    border: 1px solid #ccc; border-radius: 3px;
+    border: 1px solid var(--params-grid-input-border); border-radius: 3px;
+    background: var(--input-bg); color: var(--text);
   }
   .td-params { position: relative; }
 
@@ -89,25 +170,25 @@
   .result-cell { min-width: 140px; }
   .result-cell .run-btn {
     padding: 4px 18px; font-size: 0.9em; font-weight: 600;
-    background: #2a7de1; color: #fff; border: none; border-radius: 4px; cursor: pointer;
+    background: var(--btn-bg); color: #fff; border: none; border-radius: 4px; cursor: pointer;
   }
-  .result-cell .run-btn:hover { background: #1a6bc9; }
-  .result-cell .run-btn:disabled { background: #999; cursor: not-allowed; }
+  .result-cell .run-btn:hover { background: var(--btn-hover); }
+  .result-cell .run-btn:disabled { background: var(--btn-disabled); cursor: not-allowed; }
   .result-cell .status-text {
-    font-size: 0.82em; color: #555; margin: 3px 0;
+    font-size: 0.82em; color: var(--status-text); margin: 3px 0;
   }
   .result-cell .result-link {
-    font-size: 0.82em; color: #2a7de1; cursor: pointer; text-decoration: underline;
+    font-size: 0.82em; color: var(--result-link); cursor: pointer; text-decoration: underline;
   }
-  .result-cell .result-link:hover { color: #1a6bc9; }
+  .result-cell .result-link:hover { color: var(--result-link-hover); }
   .result-cell .error-msg {
-    font-size: 0.82em; color: #b22; cursor: help;
+    font-size: 0.82em; color: var(--error-text); cursor: help;
     display: inline-block; position: relative;
   }
   .result-cell .error-msg .error-tooltip {
     display: none; position: absolute; z-index: 20;
     left: 0; bottom: 100%; margin-bottom: 4px;
-    background: #333; color: #fff; font-size: 0.9em;
+    background: var(--error-tooltip-bg); color: var(--error-tooltip-text); font-size: 0.9em;
     padding: 6px 10px; border-radius: 4px; max-width: 300px; white-space: pre-wrap;
     word-break: break-word; pointer-events: none;
   }
@@ -116,16 +197,19 @@
 </head>
 <body>
 <div class="container">
-  <h1 style="font-size:1.2em;margin:0 0 8px 0;color:#333;">Brimer-PLAST</h1>
+  <div class="header-row">
+    <h1>Brimer-PLAST</h1>
+    <button id="theme-toggle" title="Toggle dark/light theme">☀️</button>
+  </div>
 
   <!-- File pickers (global) -->
-  <label style="font-weight:600;font-size:0.8em;display:block;margin-top:4px;color:#444;">Genome FASTA</label>
+  <label style="font-weight:600;font-size:0.8em;display:block;margin-top:4px;color:var(--label);">Genome FASTA</label>
   <div class="file-row">
     <button id="genome-btn">Browse…</button>
     <span class="path" id="genome-path">No file selected</span>
   </div>
 
-  <label style="font-weight:600;font-size:0.8em;display:block;margin-top:4px;color:#444;">GTF Annotation</label>
+  <label style="font-weight:600;font-size:0.8em;display:block;margin-top:4px;color:var(--label);">GTF Annotation</label>
   <div class="file-row">
     <button id="gtf-btn">Browse…</button>
     <span class="path" id="gtf-path">No file selected</span>
@@ -490,6 +574,39 @@
     if (runBtn) { runBtn.disabled = false; runBtn.textContent = 'Run'; }
     if (statusEl) statusEl.style.display = 'none';
     showRowError(row, data.message || 'Unknown error');
+  });
+
+  // ── Theme toggle ────────────────────────────────────────
+  const htmlEl = document.documentElement;
+  const themeToggle = document.getElementById('theme-toggle');
+
+  function setTheme(theme) {
+    htmlEl.setAttribute('data-theme', theme);
+    themeToggle.textContent = theme === 'dark' ? '🌙' : '☀️';
+    try { localStorage.setItem('brimer-theme', theme); } catch (e) { /* noop */ }
+  }
+
+  (function initTheme() {
+    const saved = (() => { try { return localStorage.getItem('brimer-theme'); } catch (e) { return null; } })();
+    if (saved === 'light' || saved === 'dark') {
+      setTheme(saved);
+    } else {
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      setTheme(prefersDark ? 'dark' : 'light');
+    }
+  })();
+
+  themeToggle.addEventListener('click', () => {
+    const current = htmlEl.getAttribute('data-theme') || 'light';
+    setTheme(current === 'dark' ? 'light' : 'dark');
+  });
+
+  // Listen for system preference changes
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+    const saved = (() => { try { return localStorage.getItem('brimer-theme'); } catch (e) { return null; } })();
+    if (!saved) {
+      setTheme(e.matches ? 'dark' : 'light');
+    }
   });
 
   // ── Initial row ──────────────────────────────────────────
