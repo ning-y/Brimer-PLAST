@@ -8,17 +8,18 @@
   *, *::before, *::after { box-sizing: border-box; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    margin: 0; padding: 20px; background: #f5f5f5; color: #222;
+    margin: 0; padding: 16px 20px; background: #f5f5f5; color: #222;
+    font-size: 14px;
   }
-  .container { max-width: 800px; margin: 0 auto; }
-  h1 { font-size: 1.4em; margin: 0 0 16px 0; color: #333; }
-  label { font-weight: 600; font-size: 0.85em; display: block; margin-top: 12px; color: #444; }
+  .container { max-width: 900px; margin: 0 auto; }
 
-  /* File picker rows */
-  .file-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+  /* ── File pickers (global) ───────────── */
+  .file-row {
+    display: flex; align-items: center; gap: 8px; margin-top: 3px;
+  }
   .file-row button {
-    white-space: nowrap; padding: 6px 16px; font-size: 0.85em;
-    background: #fff; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;
+    white-space: nowrap; padding: 4px 14px; font-size: 0.85em;
+    background: #fff; border: 1px solid #bbb; border-radius: 4px; cursor: pointer;
   }
   .file-row button:hover { background: #eee; }
   .file-row .path {
@@ -26,338 +27,482 @@
     white-space: nowrap; flex: 1;
   }
 
-  textarea, input[type="text"], input[type="number"] {
-    width: 100%; padding: 6px 8px; font-size: 0.9em;
-    border: 1px solid #ccc; border-radius: 4px;
+  /* ── Target table ────────────────────── */
+  #targets-table {
+    width: 100%; border-collapse: collapse; margin-top: 10px;
+    table-layout: fixed;
   }
-  textarea { font-family: inherit; }
+  #targets-table thead th {
+    background: #e8e8e8; font-weight: 600; font-size: 0.82em;
+    border: 1px solid #ccc; padding: 5px 6px; text-align: left;
+    position: sticky; top: 0; z-index: 1;
+  }
+  #targets-table tbody td {
+    border: 1px solid #ddd; padding: 4px 6px; vertical-align: top;
+  }
+  col.col-target  { width: 90px; }
+  col.col-name    { width: 140px; }
+  col.col-params  { width: 50px; }
+  col.col-results { width: auto; }
 
-  details { margin-top: 12px; }
-  details summary { cursor: pointer; font-weight: 600; font-size: 0.85em; color: #444; }
+  /* Target type dropdown */
+  .target-type {
+    width: 100%; font-size: 0.9em; padding: 3px 4px;
+    border: 1px solid #bbb; border-radius: 3px; background: #fff;
+  }
+
+  /* Name input */
+  .target-name {
+    width: 100%; font-size: 0.9em; padding: 3px 6px;
+    border: 1px solid #bbb; border-radius: 3px;
+  }
+
+  /* ── Per-row optional params ─────────── */
+  .params-toggle {
+    cursor: pointer; user-select: none; font-size: 0.85em;
+    background: #eee; border: 1px solid #ccc; border-radius: 3px;
+    padding: 2px 6px; text-align: center; display: inline-block;
+  }
+  .params-toggle:hover { background: #ddd; }
+  .params-panel {
+    display: none; position: absolute; z-index: 10;
+    left: 0; top: 100%; margin-top: 2px;
+    background: #fff; border: 1px solid #bbb; border-radius: 4px;
+    padding: 8px 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    width: 380px;
+  }
+  .params-panel.open { display: block; }
   .params-grid {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin-top: 8px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 5px 12px;
   }
-  .params-grid label { margin: 0; font-weight: normal; font-size: 0.8em; }
-  .params-grid input { width: 100%; }
+  .params-grid label {
+    font-weight: normal; font-size: 0.75em; color: #555; margin: 0;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .params-grid input {
+    width: 60px; padding: 2px 4px; font-size: 0.9em;
+    border: 1px solid #ccc; border-radius: 3px;
+  }
+  .td-params { position: relative; }
 
-  .run-row { margin-top: 16px; }
-  .run-row button {
-    padding: 8px 32px; font-size: 1em; font-weight: 600;
+  /* ── Results cell ────────────────────── */
+  .result-cell { min-width: 140px; }
+  .result-cell .run-btn {
+    padding: 4px 18px; font-size: 0.9em; font-weight: 600;
     background: #2a7de1; color: #fff; border: none; border-radius: 4px; cursor: pointer;
   }
-  .run-row button:hover { background: #1a6bc9; }
-  .run-row button:disabled { background: #999; cursor: not-allowed; }
-
-  /* Progress */
-  #progress-area { margin-top: 16px; display: none; }
-  #progress-bar {
-    width: 100%; height: 6px; appearance: none; border: none; border-radius: 3px;
+  .result-cell .run-btn:hover { background: #1a6bc9; }
+  .result-cell .run-btn:disabled { background: #999; cursor: not-allowed; }
+  .result-cell .status-text {
+    font-size: 0.82em; color: #555; margin: 3px 0;
   }
-  #progress-text { font-size: 0.85em; color: #555; margin-top: 4px; }
-
-  /* Results */
-  #results-area { margin-top: 16px; display: none; }
-  #results-area h2 { font-size: 1em; margin: 0 0 8px 0; }
-  table {
-    width: 100%; border-collapse: collapse; font-size: 0.78em;
+  .result-cell .result-link {
+    font-size: 0.82em; color: #2a7de1; cursor: pointer; text-decoration: underline;
   }
-  th, td {
-    border: 1px solid #ddd; padding: 4px 6px; text-align: left; white-space: nowrap;
+  .result-cell .result-link:hover { color: #1a6bc9; }
+  .result-cell .error-msg {
+    font-size: 0.82em; color: #b22; cursor: help;
+    display: inline-block; position: relative;
   }
-  th {
-    background: #e8e8e8; font-weight: 600; cursor: pointer; user-select: none;
+  .result-cell .error-msg .error-tooltip {
+    display: none; position: absolute; z-index: 20;
+    left: 0; bottom: 100%; margin-bottom: 4px;
+    background: #333; color: #fff; font-size: 0.9em;
+    padding: 6px 10px; border-radius: 4px; max-width: 300px; white-space: pre-wrap;
+    word-break: break-word; pointer-events: none;
   }
-  th:hover { background: #ddd; }
-  td.seq { font-family: "SF Mono", "Fira Code", Consolas, monospace; font-size: 0.85em; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
-  .num { text-align: right; }
-  #open-pdf-btn {
-    margin-top: 8px; padding: 6px 16px; font-size: 0.85em;
-    background: #fff; border: 1px solid #2a7de1; border-radius: 4px; color: #2a7de1; cursor: pointer;
-  }
-  #open-pdf-btn:hover { background: #eef4fd; }
-
-  /* Error */
-  #error-area { margin-top: 12px; padding: 10px; background: #fff0f0; border: 1px solid #ecc; border-radius: 4px; color: #b22; font-size: 0.85em; display: none; }
-
-  .warnings { color: #a67c00; font-size: 0.82em; margin-top: 4px; }
+  .result-cell .error-msg:hover .error-tooltip { display: block; }
 </style>
 </head>
 <body>
 <div class="container">
-  <h1>Brimer-PLAST</h1>
+  <h1 style="font-size:1.2em;margin:0 0 8px 0;color:#333;">Brimer-PLAST</h1>
 
-  <!-- File pickers -->
-  <label for="genome-btn">Genome FASTA</label>
+  <!-- File pickers (global) -->
+  <label style="font-weight:600;font-size:0.8em;display:block;margin-top:4px;color:#444;">Genome FASTA</label>
   <div class="file-row">
     <button id="genome-btn">Browse…</button>
     <span class="path" id="genome-path">No file selected</span>
   </div>
 
-  <label for="gtf-btn">GTF Annotation</label>
+  <label style="font-weight:600;font-size:0.8em;display:block;margin-top:4px;color:#444;">GTF Annotation</label>
   <div class="file-row">
     <button id="gtf-btn">Browse…</button>
     <span class="path" id="gtf-path">No file selected</span>
   </div>
 
-  <!-- Target genes -->
-  <label for="targets">Target gene(s) — one per line</label>
-  <textarea id="targets" rows="3" placeholder="GAPDH&#10;ACTB"></textarea>
+  <!-- Target table -->
+  <table id="targets-table">
+    <colgroup>
+      <col class="col-target">
+      <col class="col-name">
+      <col class="col-params">
+      <col class="col-results">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Target</th>
+        <th>Name</th>
+        <th>Params</th>
+        <th>Results</th>
+      </tr>
+    </thead>
+    <tbody id="targets-body"></tbody>
+  </table>
 
-  <!-- Advanced params -->
-  <details>
-    <summary>Primer parameters (optional)</summary>
-    <div class="params-grid">
-      <label>Product min <input type="number" id="product-min" value="80"></label>
-      <label>Product max <input type="number" id="product-max" value="200"></label>
-      <label>Opt Tm (°C) <input type="number" id="opt-tm" value="60" step="0.1"></label>
-      <label>Min Tm (°C) <input type="number" id="min-tm" value="57" step="0.1"></label>
-      <label>Max Tm (°C) <input type="number" id="max-tm" value="63" step="0.1"></label>
-      <label>Opt primer length <input type="number" id="opt-size" value="20"></label>
-      <label>Min primer length <input type="number" id="min-size" value="18"></label>
-      <label>Max primer length <input type="number" id="max-size" value="25"></label>
-      <label>Min GC% <input type="number" id="min-gc" value="40"></label>
-      <label>Max GC% <input type="number" id="max-gc" value="60"></label>
-      <label>Pairs per chain <input type="number" id="num-return" value="50"></label>
-      <label>Max amplicon (bp) <input type="number" id="max-amplicon" value="2000"></label>
-    </div>
-  </details>
-
-  <!-- Run -->
-  <div class="run-row">
-    <button id="run-btn">Run</button>
-  </div>
-
-  <!-- Progress -->
-  <div id="progress-area">
-    <progress id="progress-bar"></progress>
-    <div id="progress-text"></div>
-  </div>
-
-  <!-- Error -->
-  <div id="error-area"></div>
-
-  <!-- Results -->
-  <div id="results-area">
-    <h2 id="results-title"></h2>
-    <div id="warnings-area" class="warnings"></div>
-    <table>
-      <thead><tr>
-        <th data-col="pair_name">Name</th>
-        <th data-col="forward_seq">Forward (5'→3')</th>
-        <th data-col="reverse_seq">Reverse (5'→3')</th>
-        <th data-col="forward_tm" class="num">Tm (°C)</th>
-        <th data-col="forward_gc" class="num">GC%</th>
-        <th data-col="product_size" class="num">Size</th>
-      </tr></thead>
-      <tbody id="pairs-body"></tbody>
-    </table>
-    <button id="open-pdf-btn" style="display:none">Open PDF report</button>
+  <!-- PDF opener fallback (if no result-link is visible) -->
+  <div id="global-pdf-area" style="margin-top:8px;display:none;">
+    <a id="global-pdf-link" href="#" style="font-size:0.85em;">Open PDF report</a>
   </div>
 </div>
 
 <script>
-  (function () {
-    'use strict';
+(function () {
+  'use strict';
 
-    // ── State ─────────────────────────────────────────────────
-    let genomePath = null;
-    let gtfPath = null;
-    let currentPdfPath = null;
-    let running = false;
+  // ── State ─────────────────────────────────────────────────
+  let genomePath = null;
+  let gtfPath = null;
 
-    // ── DOM refs ──────────────────────────────────────────────
-    const genomeBtn = document.getElementById('genome-btn');
-    const genomePathEl = document.getElementById('genome-path');
-    const gtfBtn = document.getElementById('gtf-btn');
-    const gtfPathEl = document.getElementById('gtf-path');
-    const targetsEl = document.getElementById('targets');
-    const runBtn = document.getElementById('run-btn');
-    const progressArea = document.getElementById('progress-area');
-    const progressBar = document.getElementById('progress-bar');
-    const progressText = document.getElementById('progress-text');
-    const errorArea = document.getElementById('error-area');
-    const resultsArea = document.getElementById('results-area');
-    const resultsTitle = document.getElementById('results-title');
-    const warningsArea = document.getElementById('warnings-area');
-    const pairsBody = document.getElementById('pairs-body');
-    const openPdfBtn = document.getElementById('open-pdf-btn');
+  const GENE_PLACEHOLDER  = 'e.g. LTBP4';
+  const TRANS_PLACEHOLDER = 'e.g. ENST00000204005';
 
-    // ── File pickers ─────────────────────────────────────────
-    genomeBtn.addEventListener('click', async () => {
-      const path = await window.api.selectFasta();
-      if (path) { genomePath = path; genomePathEl.textContent = path; }
-    });
+  // Active running requests: requestId -> rowIndex
+  const runningMap = new Map();
 
-    gtfBtn.addEventListener('click', async () => {
-      const path = await window.api.selectGtf();
-      if (path) { gtfPath = path; gtfPathEl.textContent = path; }
-    });
+  // ── DOM refs ──────────────────────────────────────────────
+  const genomeBtn = document.getElementById('genome-btn');
+  const genomePathEl = document.getElementById('genome-path');
+  const gtfBtn = document.getElementById('gtf-btn');
+  const gtfPathEl = document.getElementById('gtf-path');
+  const targetsBody = document.getElementById('targets-body');
+  const globalPdfArea = document.getElementById('global-pdf-area');
+  const globalPdfLink = document.getElementById('global-pdf-link');
 
-    // ── Progress & error listeners ────────────────────────────
-    window.api.onProgress((data) => {
-      progressBar.value = data.pct || 0;
-      progressText.textContent = data.message || '';
-    });
+  // ── File pickers ─────────────────────────────────────────
+  genomeBtn.addEventListener('click', async () => {
+    const path = await window.api.selectFasta();
+    if (path) { genomePath = path; genomePathEl.textContent = path; }
+  });
+  gtfBtn.addEventListener('click', async () => {
+    const path = await window.api.selectGtf();
+    if (path) { gtfPath = path; gtfPathEl.textContent = path; }
+  });
 
-    window.api.onError((msg) => {
-      running = false;
-      runBtn.disabled = false;
-      progressArea.style.display = 'none';
-      showError(msg);
-    });
+  // ── Create a row ─────────────────────────────────────────
+  function createRow() {
+    const tr = document.createElement('tr');
+    tr.className = 'target-row';
 
-    // ── Helpers ───────────────────────────────────────────────
-    function showError(msg) {
-      errorArea.textContent = msg;
-      errorArea.style.display = 'block';
-    }
+    // Target type dropdown
+    const tdTarget = document.createElement('td');
+    const sel = document.createElement('select');
+    sel.className = 'target-type';
+    const optG = document.createElement('option'); optG.value = 'gene'; optG.textContent = 'Gene';
+    const optT = document.createElement('option'); optT.value = 'transcript'; optT.textContent = 'Transcript';
+    sel.appendChild(optG);
+    sel.appendChild(optT);
+    tdTarget.appendChild(sel);
 
-    function clearError() {
-      errorArea.style.display = 'none';
-      errorArea.textContent = '';
-    }
+    // Name input
+    const tdName = document.createElement('td');
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.className = 'target-name';
+    inp.placeholder = GENE_PLACEHOLDER;
+    tdName.appendChild(inp);
 
-    function getParam(id) {
-      const el = document.getElementById(id);
-      const val = parseFloat(el.value);
-      return isNaN(val) ? undefined : val;
-    }
+    // Optional params (collapsible)
+    const tdParams = document.createElement('td');
+    tdParams.className = 'td-params';
+    const toggleBtn = document.createElement('span');
+    toggleBtn.className = 'params-toggle';
+    toggleBtn.textContent = '▸';
+    toggleBtn.title = 'Primer parameters';
+    tdParams.appendChild(toggleBtn);
 
-    // ── Table sorting ─────────────────────────────────────────
-    let sortCol = null;
-    let sortAsc = true;
+    const panel = document.createElement('div');
+    panel.className = 'params-panel';
+    panel.innerHTML = `
+      <div class="params-grid">
+        <label>Product min <input class="pp" data-key="product-min" type="number" value="80"></label>
+        <label>Product max <input class="pp" data-key="product-max" type="number" value="200"></label>
+        <label>Opt Tm (°C) <input class="pp" data-key="opt-tm" type="number" value="60" step="0.1"></label>
+        <label>Min Tm (°C) <input class="pp" data-key="min-tm" type="number" value="57" step="0.1"></label>
+        <label>Max Tm (°C) <input class="pp" data-key="max-tm" type="number" value="63" step="0.1"></label>
+        <label>Opt length <input class="pp" data-key="opt-size" type="number" value="20"></label>
+        <label>Min length <input class="pp" data-key="min-size" type="number" value="18"></label>
+        <label>Max length <input class="pp" data-key="max-size" type="number" value="25"></label>
+        <label>Min GC% <input class="pp" data-key="min-gc" type="number" value="40"></label>
+        <label>Max GC% <input class="pp" data-key="max-gc" type="number" value="60"></label>
+        <label>Pairs/chain <input class="pp" data-key="num-return" type="number" value="50"></label>
+        <label>Max amplicon <input class="pp" data-key="max-amplicon" type="number" value="2000"></label>
+      </div>
+    `;
+    tdParams.appendChild(panel);
 
-    function renderPairs(pairs) {
-      // Sort if a column is selected
-      let sorted = [...pairs];
-      if (sortCol) {
-        sorted.sort((a, b) => {
-          const va = a[sortCol], vb = b[sortCol];
-          if (typeof va === 'number' && typeof vb === 'number') {
-            return sortAsc ? va - vb : vb - va;
-          }
-          const sa = String(va || ''), sb = String(vb || '');
-          return sortAsc ? sa.localeCompare(sb) : sb.localeCompare(sa);
-        });
-      }
-
-      pairsBody.innerHTML = '';
-      for (const p of sorted) {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${esc(p.pair_name || '')}</td>
-          <td class="seq">${esc(p.forward_seq || '')}</td>
-          <td class="seq">${esc(p.reverse_seq || '')}</td>
-          <td class="num">${fmt(p.forward_tm)}</td>
-          <td class="num">${fmt(p.forward_gc)}</td>
-          <td class="num">${fmt(p.product_size)}</td>
-        `;
-        pairsBody.appendChild(tr);
-      }
-    }
-
-    function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-    function fmt(v) { return v == null ? '–' : typeof v === 'number' ? v.toFixed(1) : v; }
-
-    // Click on table header to sort
-    document.querySelector('thead').addEventListener('click', (e) => {
-      const th = e.target.closest('th');
-      if (!th) return;
-      const col = th.dataset.col;
-      if (!col) return;
-      if (sortCol === col) { sortAsc = !sortAsc; } else { sortCol = col; sortAsc = true; }
-      // Re-render the last set of pairs
-      if (window._lastPairs) renderPairs(window._lastPairs);
-    });
-
-    // ── Run pipeline ──────────────────────────────────────────
-    runBtn.addEventListener('click', async () => {
-      // Validate
-      if (!genomePath) { showError('Please select a genome FASTA file.'); return; }
-      if (!gtfPath) { showError('Please select a GTF annotation file.'); return; }
-      const targets = targetsEl.value.split('\n').map(s => s.trim()).filter(Boolean);
-      if (targets.length === 0) { showError('Please enter at least one target gene.'); return; }
-
-      clearError();
-      resultsArea.style.display = 'none';
-      currentPdfPath = null;
-
-      const primerArgs = {
-        PRIMER_NUM_RETURN: getParam('num-return') || 50,
-        PRIMER_PRODUCT_SIZE_RANGE: `${getParam('product-min') || 80}-${getParam('product-max') || 200}`,
-        PRIMER_OPT_TM: getParam('opt-tm') || 60,
-        PRIMER_MIN_TM: getParam('min-tm') || 57,
-        PRIMER_MAX_TM: getParam('max-tm') || 63,
-        PRIMER_OPT_SIZE: getParam('opt-size') || 20,
-        PRIMER_MIN_SIZE: getParam('min-size') || 18,
-        PRIMER_MAX_SIZE: getParam('max-size') || 25,
-        PRIMER_MIN_GC: getParam('min-gc') || 40,
-        PRIMER_MAX_GC: getParam('max-gc') || 60,
-      };
-      const maxAmplicon = getParam('max-amplicon') || 2000;
-
-      running = true;
-      runBtn.disabled = true;
-      progressArea.style.display = 'block';
-      progressBar.removeAttribute('value'); // indeterminate
-      progressText.textContent = 'Starting…';
-
-      for (let i = 0; i < targets.length; i++) {
-        const target = targets[i];
-        progressText.textContent = `[${i+1}/${targets.length}] ${target} — starting…`;
-
-        try {
-          const result = await window.api.runPipeline({
-            genome: genomePath,
-            annotations: gtfPath,
-            target_key: target,
-            target_type: 'gene',
-            primer_args: primerArgs,
-            max_amplicon: maxAmplicon,
-            pdf_output_dir: null, // main.js will inject app data dir
-          });
-
-          // Show results for this target
-          resultsTitle.textContent = `Target: ${target} — ${result.filtered_pairs.length} primer pair(s)`;
-          if (result.warnings && result.warnings.length > 0) {
-            warningsArea.textContent = result.warnings.join('\n');
-            warningsArea.style.display = 'block';
-          } else {
-            warningsArea.style.display = 'none';
-          }
-
-          window._lastPairs = result.filtered_pairs;
-          renderPairs(result.filtered_pairs);
-
-          if (result.pdf_path) {
-            currentPdfPath = result.pdf_path;
-            openPdfBtn.style.display = 'inline-block';
-          } else {
-            openPdfBtn.style.display = 'none';
-          }
-
-          resultsArea.style.display = 'block';
-          progressText.textContent = `[${i+1}/${targets.length}] ${target} — done`;
-        } catch (err) {
-          showError(`[${target}] ${err.message}`);
-          running = false;
-          runBtn.disabled = false;
-          progressArea.style.display = 'none';
-          return;
+    toggleBtn.addEventListener('click', () => {
+      const open = panel.classList.toggle('open');
+      toggleBtn.textContent = open ? '▾' : '▸';
+      // Adjust table position if panel grows beyond viewport
+      if (open) {
+        const rect = panel.getBoundingClientRect();
+        const rightEdge = rect.right;
+        const vw = window.innerWidth;
+        if (rightEdge > vw) {
+          panel.style.left = 'auto';
+          panel.style.right = '0';
         }
       }
-
-      running = false;
-      runBtn.disabled = false;
-      progressBar.value = 100;
-      progressText.textContent = 'All targets complete.';
+    });
+    // Close panel when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!tdParams.contains(e.target)) {
+        panel.classList.remove('open');
+        toggleBtn.textContent = '▸';
+      }
     });
 
-    // ── Open PDF ──────────────────────────────────────────────
-    openPdfBtn.addEventListener('click', () => {
-      if (currentPdfPath) window.api.openPdf(currentPdfPath);
+    // Results cell
+    const tdResults = document.createElement('td');
+    tdResults.className = 'result-cell';
+    const runBtn = document.createElement('button');
+    runBtn.className = 'run-btn';
+    runBtn.textContent = 'Run';
+    tdResults.appendChild(runBtn);
+
+    const statusEl = document.createElement('div');
+    statusEl.className = 'status-text';
+    statusEl.style.display = 'none';
+    tdResults.appendChild(statusEl);
+
+    const resultLink = document.createElement('span');
+    resultLink.className = 'result-link';
+    resultLink.style.display = 'none';
+    tdResults.appendChild(resultLink);
+
+    const errorEl = document.createElement('span');
+    errorEl.className = 'error-msg';
+    errorEl.style.display = 'none';
+    errorEl.innerHTML = '<span class="error-tooltip"></span>';
+    tdResults.appendChild(errorEl);
+
+    // Assemble row
+    tr.appendChild(tdTarget);
+    tr.appendChild(tdName);
+    tr.appendChild(tdParams);
+    tr.appendChild(tdResults);
+    targetsBody.appendChild(tr);
+
+    // ── Placeholder switching ───────────────────────
+    sel.addEventListener('change', () => {
+      inp.placeholder = sel.value === 'gene' ? GENE_PLACEHOLDER : TRANS_PLACEHOLDER;
     });
-  })();
+
+    // ── Tab navigation ─────────────────────────────
+    // Collect tabbable elements in this row
+    function getTabbables() {
+      const tabbables = [sel, inp];
+      // If params panel is open, add the input fields
+      if (panel.classList.contains('open')) {
+        panel.querySelectorAll('.pp').forEach(el => tabbables.push(el));
+      }
+      tabbables.push(runBtn);
+      return tabbables;
+    }
+
+    tr.addEventListener('keydown', (e) => {
+      if (e.key !== 'Tab') return;
+      e.preventDefault();
+      const tabbables = getTabbables();
+      const idx = tabbables.indexOf(e.target);
+      if (idx === -1) return;
+
+      if (e.shiftKey) {
+        // Shift+Tab: previous
+        if (idx > 0) {
+          tabbables[idx - 1].focus();
+        } else {
+          // Go to previous row's last field
+          const prevRow = tr.previousElementSibling;
+          if (prevRow) {
+            const prevTabbables = getRowTabbables(prevRow);
+            if (prevTabbables.length > 0) prevTabbables[prevTabbables.length - 1].focus();
+            else prevRow.querySelector('.target-type')?.focus();
+          }
+        }
+      } else {
+        // Tab: next
+        if (idx < tabbables.length - 1) {
+          tabbables[idx + 1].focus();
+        } else {
+          // Last field: go to next row or add new row
+          const nextRow = tr.nextElementSibling;
+          if (nextRow) {
+            const nextTabbables = getRowTabbables(nextRow);
+            if (nextTabbables.length > 0) nextTabbables[0].focus();
+            else nextRow.querySelector('.target-type')?.focus();
+          } else {
+            // Add a new row and focus its first field
+            const newRow = createRow();
+            newRow.querySelector('.target-type').focus();
+          }
+        }
+      }
+    });
+
+    // ── Run button ────────────────────────────────
+    runBtn.addEventListener('click', async () => {
+      if (runBtn.disabled) return;
+      if (!genomePath) { showRowError(tr, 'Select a genome FASTA first.'); return; }
+      if (!gtfPath) { showRowError(tr, 'Select a GTF annotation first.'); return; }
+      const name = inp.value.trim();
+      if (!name) { showRowError(tr, 'Enter a target name.'); return; }
+
+      clearRowState(tr);
+      runBtn.disabled = true;
+      runBtn.textContent = 'Running…';
+      statusEl.style.display = 'block';
+      statusEl.textContent = 'Starting…';
+
+      const targetType = sel.value;
+
+      // Read optional params from panel
+      const primerArgs = {};
+      panel.querySelectorAll('.pp').forEach(el => {
+        const key = el.dataset.key;
+        const val = parseFloat(el.value);
+        if (isNaN(val)) return;
+        switch (key) {
+          case 'product-min': break; // handled below
+          case 'product-max': break;
+          case 'num-return': primerArgs.PRIMER_NUM_RETURN = val; break;
+          case 'opt-tm':     primerArgs.PRIMER_OPT_TM = val; break;
+          case 'min-tm':     primerArgs.PRIMER_MIN_TM = val; break;
+          case 'max-tm':     primerArgs.PRIMER_MAX_TM = val; break;
+          case 'opt-size':   primerArgs.PRIMER_OPT_SIZE = val; break;
+          case 'min-size':   primerArgs.PRIMER_MIN_SIZE = val; break;
+          case 'max-size':   primerArgs.PRIMER_MAX_SIZE = val; break;
+          case 'min-gc':     primerArgs.PRIMER_MIN_GC = val; break;
+          case 'max-gc':     primerArgs.PRIMER_MAX_GC = val; break;
+          case 'max-amplicon': break; // handled below
+        }
+      });
+      const productMin = parseFloat(panel.querySelector('[data-key="product-min"]').value) || 80;
+      const productMax = parseFloat(panel.querySelector('[data-key="product-max"]').value) || 200;
+      primerArgs.PRIMER_PRODUCT_SIZE_RANGE = `${productMin}-${productMax}`;
+      const maxAmplicon = parseFloat(panel.querySelector('[data-key="max-amplicon"]').value) || 2000;
+
+      try {
+        const { promise, requestId } = await window.api.runPipeline({
+          genome: genomePath,
+          annotations: gtfPath,
+          target_key: name,
+          target_type: targetType,
+          primer_args: primerArgs,
+          max_amplicon: maxAmplicon,
+          pdf_output_dir: null,
+        });
+
+        runningMap.set(requestId, tr);
+
+        const result = await promise;
+        runningMap.delete(requestId);
+
+        runBtn.disabled = false;
+        runBtn.textContent = 'Run';
+        statusEl.style.display = 'none';
+
+        const count = result.filtered_pairs ? result.filtered_pairs.length : 0;
+        resultLink.style.display = 'inline';
+        resultLink.textContent = `${count} primer${count !== 1 ? 's' : ''} found`;
+
+        if (result.pdf_path) {
+          resultLink.dataset.pdfPath = result.pdf_path;
+          resultLink.title = 'Click to open PDF report';
+          resultLink.style.cursor = 'pointer';
+          resultLink.addEventListener('click', () => {
+            window.api.openPdf(result.pdf_path);
+          });
+        } else {
+          resultLink.dataset.pdfPath = '';
+          resultLink.title = '';
+          resultLink.style.cursor = 'default';
+        }
+      } catch (err) {
+        runningMap.delete(requestId);
+        runBtn.disabled = false;
+        runBtn.textContent = 'Run';
+        statusEl.style.display = 'none';
+        showRowError(tr, err.message);
+      }
+    });
+
+    return tr;
+  }
+
+  // ── Helpers ──────────────────────────────────────────────
+  function getRowTabbables(row) {
+    const sel = row.querySelector('.target-type');
+    const inp = row.querySelector('.target-name');
+    const panel = row.querySelector('.params-panel');
+    const runBtn = row.querySelector('.run-btn');
+    const tabbables = [sel, inp].filter(Boolean);
+    if (panel && panel.classList.contains('open')) {
+      panel.querySelectorAll('.pp').forEach(el => tabbables.push(el));
+    }
+    if (runBtn) tabbables.push(runBtn);
+    return tabbables;
+  }
+
+  function showRowError(tr, msg) {
+    const errorEl = tr.querySelector('.error-msg');
+    const tooltip = errorEl.querySelector('.error-tooltip');
+    if (tooltip) tooltip.textContent = msg;
+    errorEl.style.display = 'inline';
+    // Auto-hide after 8 seconds
+    setTimeout(() => { errorEl.style.display = 'none'; }, 8000);
+  }
+
+  function clearRowState(tr) {
+    const statusEl = tr.querySelector('.status-text');
+    const resultLink = tr.querySelector('.result-link');
+    const errorEl = tr.querySelector('.error-msg');
+    if (statusEl) { statusEl.style.display = 'none'; statusEl.textContent = ''; }
+    if (resultLink) { resultLink.style.display = 'none'; resultLink.textContent = ''; resultLink.dataset.pdfPath = ''; }
+    if (errorEl) { errorEl.style.display = 'none'; }
+  }
+
+  // ── Global progress/error listeners ──────────────────────
+  window.api.onProgress((data) => {
+    const row = runningMap.get(data._requestId);
+    if (!row) return;
+    const statusEl = row.querySelector('.status-text');
+    if (statusEl) statusEl.textContent = data.message || '';
+  });
+
+  window.api.onError((data) => {
+    const row = runningMap.get(data._requestId);
+    if (!row) return;
+    runningMap.delete(data._requestId);
+    const runBtn = row.querySelector('.run-btn');
+    const statusEl = row.querySelector('.status-text');
+    if (runBtn) { runBtn.disabled = false; runBtn.textContent = 'Run'; }
+    if (statusEl) statusEl.style.display = 'none';
+    showRowError(row, data.message || 'Unknown error');
+  });
+
+  // ── Initial row ──────────────────────────────────────────
+  createRow().querySelector('.target-type').focus();
+
+  // ── Global PDF link ──────────────────────────────────────
+  globalPdfLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    const href = globalPdfLink.getAttribute('href');
+    if (href && href !== '#') window.api.openPdf(href);
+  });
+
+})();
 </script>
 </body>
 </html>

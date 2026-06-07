@@ -1,7 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
-  // File pickers
   selectFasta: () =>
     ipcRenderer.invoke('select-file', {
       title: 'Select genome FASTA',
@@ -15,17 +14,20 @@ contextBridge.exposeInMainWorld('api', {
       filters: [{ name: 'GTF', extensions: ['gtf'] }],
     }),
 
-  // Pipeline
-  runPipeline: (params) => ipcRenderer.invoke('run-pipeline', params),
+  // Returns { promise, requestId }
+  runPipeline: (params) => {
+    const requestId = crypto.randomUUID();
+    const promise = ipcRenderer.invoke('run-pipeline', { ...params, _requestId: requestId });
+    return { promise, requestId };
+  },
 
-  // Progress and error listeners
+  // Progress listener — data includes _requestId to route to the right row
   onProgress: (callback) => {
     ipcRenderer.on('pipeline-progress', (_event, data) => callback(data));
   },
   onError: (callback) => {
-    ipcRenderer.on('pipeline-error', (_event, msg) => callback(msg));
+    ipcRenderer.on('pipeline-error', (_event, data) => callback(data));
   },
 
-  // Open PDF in system viewer
   openPdf: (filePath) => ipcRenderer.invoke('open-pdf', filePath),
 });
