@@ -282,8 +282,10 @@
       primerArgs.PRIMER_PRODUCT_SIZE_RANGE = `${productMin}-${productMax}`;
       const maxAmplicon = parseFloat(panel.querySelector('[data-key="max-amplicon"]').value) || 2000;
 
+      let requestId;
+
       try {
-        const { promise, requestId } = await window.api.runPipeline({
+        const runResult = await window.api.runPipeline({
           genome: genomePath,
           annotations: gtfPath,
           target_key: name,
@@ -292,6 +294,9 @@
           max_amplicon: maxAmplicon,
           pdf_output_dir: null,
         });
+
+        requestId = runResult.requestId;
+        const promise = runResult.promise;
 
         runningMap.set(requestId, tr);
 
@@ -317,7 +322,7 @@
           resultLink.style.cursor = 'default';
         }
       } catch (err) {
-        runningMap.delete(requestId);
+        if (requestId) runningMap.delete(requestId);
         statusEl.style.display = 'none';
         showRowError(tr, err.message);
       }

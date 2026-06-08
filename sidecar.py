@@ -71,7 +71,7 @@ def handle_run_pipeline(rid: int, params: dict) -> None:
         send({"id": rid, "status": "error", "message": str(e)})
         return
     except (RuntimeError, FileNotFoundError) as e:
-        send({"id": rid, "status": "error", "message": f"tnBLAST error: {e}"})
+        send({"id": rid, "status": "error", "message": str(e)})
         return
 
     # ── Generate PDF ───────────────────────────────────────────

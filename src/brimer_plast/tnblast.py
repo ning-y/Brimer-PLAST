@@ -123,9 +123,18 @@ def run_tnblast(
                 "and available on PATH."
             ) from None
         except subprocess.TimeoutExpired:
+            cmd_str = " ".join(cmd)
+            # Log full command to stderr for debugging
+            import logging
+            logging.getLogger("brimer_plast.tnblast").error(
+                "tnBLAST timed out after %ss. Full command:\n%s",
+                timeout, cmd_str,
+            )
             raise RuntimeError(
-                f"tnBLAST timed out after {timeout}s:\n"
-                f"  command: {' '.join(cmd)}"
+                f"tnBLAST timed out after {timeout // 60} minute(s). "
+                f"The genome or transcriptome search took too long. "
+                f"Try increasing the timeout with --tntblast-timeout=<seconds>, "
+                f"or reduce the search space with --max-amplicon."
             ) from None
         if result.stderr:
             import logging
