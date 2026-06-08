@@ -58,6 +58,7 @@ def run_tnblast(
     max_tm: float = 65.0,
     salt_conc: float = 0.05,
     output_path: str | Path | None = None,
+    timeout: int = 1800,
 ) -> dict[str, int]:
     """Run tnBLAST and return a dict mapping assay name to amplicon count.
 
@@ -71,6 +72,8 @@ def run_tnblast(
         output_path: Optional explicit path for tnBLAST output. If provided,
             the file is NOT cleaned up — the caller owns it. If None, a temp
             file is used and cleaned up automatically.
+        timeout: Maximum runtime in seconds (default 1800 = 30 min).
+            Raises RuntimeError if tnBLAST does not complete in time.
 
     Returns:
         { "9746.1:45-199": 1, ... }
@@ -78,7 +81,7 @@ def run_tnblast(
         (1 = specific, >1 = off-target amplification, 0 = no amplification).
 
     Raises:
-        RuntimeError: tnBLAST exited with a non-zero status.
+        RuntimeError: tnBLAST exited with a non-zero status or timed out.
         FileNotFoundError: tnBLAST is not installed or not on PATH.
     """
     owns_tmp = output_path is None
@@ -112,12 +115,23 @@ def run_tnblast(
                 cmd,
                 capture_output=True,
                 text=True,
+                timeout=timeout,
             )
         except FileNotFoundError:
             raise FileNotFoundError(
                 "tntblast: command not found. Ensure tnBLAST is installed "
                 "and available on PATH."
             ) from None
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(
+                f"tnBLAST timed out after {timeout}s:\n"
+                f"  command: {' '.join(cmd)}"
+            ) from None
+        if result.stderr:
+            import logging
+            logging.getLogger("brimer_plast.tnblast").warning(
+                "tnBLAST stderr:\n%s", result.stderr
+            )
         if result.returncode != 0:
             raise RuntimeError(
                 f"tnBLAST failed (exit {result.returncode}):\n"

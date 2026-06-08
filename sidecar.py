@@ -44,6 +44,7 @@ def handle_run_pipeline(rid: int, params: dict) -> None:
     target_type = params.get("target_type", "gene")
     primer_args = params.get("primer_args", {})
     max_amplicon = params.get("max_amplicon", 2000)
+    tnblast_timeout = params.get("tnblast_timeout", 1800)
     pdf_output_dir = params.get("pdf_output_dir")
 
     # Determine target_gene / target_transcript for PDF report
@@ -61,6 +62,7 @@ def handle_run_pipeline(rid: int, params: dict) -> None:
             target_type=target_type,
             primer_args=primer_args,
             max_amplicon=max_amplicon,
+            tnblast_timeout=tnblast_timeout,
             progress_callback=lambda pct, msg: send(
                 {"id": rid, "status": "progress", "message": msg, "pct": pct}
             ),

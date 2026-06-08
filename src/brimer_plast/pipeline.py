@@ -117,6 +117,7 @@ def run_pipeline(
     primer_args: dict[str, Any],
     max_amplicon: int = 2000,
     progress_callback: Callable[[int, str], None] | None = None,
+    tnblast_timeout: int = 1800,
 ) -> PipelineResult:
     """Run the full Brimer-PLAST design + filter pipeline for one target.
 
@@ -133,6 +134,8 @@ def run_pipeline(
         max_amplicon: Maximum tnBLAST amplicon search length.
         progress_callback: Optional ``(pct, message)`` called during
             long-running stages.  ``pct`` is an integer 0-100.
+        tnblast_timeout: Maximum seconds for each tnBLAST call
+            (default 1800 = 30 min).
 
     Returns:
         A :class:`PipelineResult` with chains, filtered pairs, etc.
@@ -289,6 +292,7 @@ def run_pipeline(
                 min_tm=primer_args.get("PRIMER_MIN_TM", 57.0),
                 max_tm=primer_args.get("PRIMER_MAX_TM", 63.0),
                 output_path=genome_out,
+                timeout=tnblast_timeout,
             )
             transcriptome_out = os.path.join(tmp_dir, "tntblast_transcriptome.txt")
             log.info("  tnBLAST genome scan complete")
@@ -300,6 +304,7 @@ def run_pipeline(
                 min_tm=primer_args.get("PRIMER_MIN_TM", 57.0),
                 max_tm=primer_args.get("PRIMER_MAX_TM", 63.0),
                 output_path=transcriptome_out,
+                timeout=tnblast_timeout,
             )
             log.info("  tnBLAST transcriptome scan complete")
         except (RuntimeError, FileNotFoundError):

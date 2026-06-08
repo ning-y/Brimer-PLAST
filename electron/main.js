@@ -123,6 +123,17 @@ function killAllSidecars() {
   pendingRequests.clear();
 }
 
+// ── Custom CLI argument parsing ────────────────────────────────
+function parseTntblastTimeout() {
+  for (const arg of process.argv) {
+    if (arg.startsWith('--tntblast-timeout=')) {
+      const val = parseInt(arg.split('=')[1], 10);
+      if (!isNaN(val) && val > 0) return val;
+    }
+  }
+  return 1800;  // default 30 min
+}
+
 // ── Window ─────────────────────────────────────────────────────────
 function createWindow() {
   const win = new BrowserWindow({
@@ -160,7 +171,11 @@ app.whenReady().then(() => {
   ipcMain.handle('run-pipeline', async (event, params) => {
     const { _requestId, pdf_output_dir, ...rest } = params;
     const reportsDir = path.join(app.getPath('userData'), 'reports');
-    const fullParams = { ...rest, pdf_output_dir: reportsDir };
+    const fullParams = {
+      ...rest,
+      pdf_output_dir: reportsDir,
+      tnblast_timeout: parseTntblastTimeout(),
+    };
 
     return new Promise((resolve, reject) => {
       const sidecarId = nextId++;
