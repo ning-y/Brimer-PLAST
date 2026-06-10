@@ -1,0 +1,64 @@
+# Build the Brimer-PLAST Electron AppImage in an Ubuntu 24.04
+# environment (matching the CI runner) so the tnBLAST binary
+# is the same one that causes the hang.
+FROM ubuntu:24.04
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    g++ \
+    make \
+    zlib1g-dev \
+    ca-certificates \
+    wget \
+    python3 \
+    python3-pip \
+    python3-venv \
+    python3-dev \
+    nodejs \
+    npm \
+    libfuse2 \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── tnBLAST ────────────────────────────────────────────────────────
+WORKDIR /build/tntblast
+RUN wget -q -O tnblast.tar.gz \
+    https://github.com/jgans/thermonucleotideBLAST/archive/refs/tags/v2.77.tar.gz \
+    && tar xzf tnblast.tar.gz --strip-components=1 \
+    && rm tnblast.tar.gz
+
+RUN sed -i Makefile \
+    -e 's|^CC = mpic++|CC = g++|' \
+    -e 's|-DUSE_MPI||g' \
+    -e 's|-DUSE_BLAST_DB||g' \
+    -e 's|^BLAST_DIR =.*|# BLAST_DIR commented out (minimal build)|'
+
+RUN make -j$(nproc) CC=g++ FLAGS="-O3 -Wall -fopenmp -std=c++14" LIBS="-lm -lz" OPENMP=-fopenmp
+RUN cp tntblast /usr/local/bin/
+
+# ── Project source ─────────────────────────────────────────────────
+WORKDIR /app
+COPY pyproject.toml README.md ./
+COPY src/ ./src/
+COPY sidecar.py ./
+COPY electron/ ./electron/
+
+# ── Python deps + PyInstaller ──────────────────────────────────────
+RUN pip install --break-system-packages primer3-py pyinstaller -q
+RUN pip install --break-system-packages -e . -q
+
+RUN pyinstaller \
+    --onefile \
+    --name pybrimer \
+    --collect-all primer3 \
+    --add-binary "$(which tntblast):." \
+    sidecar.py
+
+# ── Electron deps + AppImage ──────────────────────────────────────
+WORKDIR /app/electron
+RUN npm install --silent
+RUN npx electron-builder --linux AppImage
+
+# ── Extract artifact ───────────────────────────────────────────────
+RUN mkdir -p /output && cp dist/*.AppImage /output/
+
+CMD ["ls", "-lh", "/output/"]

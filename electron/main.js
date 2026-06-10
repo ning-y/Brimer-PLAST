@@ -4,8 +4,106 @@ const path = require('path');
 const fs = require('fs');
 const readline = require('readline');
 
-// ── Sidecar management ─────────────────────────────────────────────
-// Map<sidecarId, { resolve, reject, event, process, requestId }>
+// ── CLI mode detection ────────────────────────────────────────────
+const IS_CLI_MODE = process.argv.includes('--cli');
+
+function parseCliArgs() {
+  const args = {};
+  for (const arg of process.argv) {
+    const m = arg.match(/^--([^=]+)=(.*)$/);
+    if (m) args[m[1]] = m[2];
+  }
+  return args;
+}
+
+function buildPipelineParams(cliArgs) {
+  const genome = cliArgs.genome;
+  const annotations = cliArgs.annotations;
+  const targetGene = cliArgs['target-gene'];
+  const targetTranscript = cliArgs['target-transcript'];
+
+  if (!genome) throw new Error('--genome=<path> is required');
+  if (!annotations) throw new Error('--annotations=<path> is required');
+  if (!targetGene && !targetTranscript) {
+    throw new Error('--target-gene=<name> or --target-transcript=<id> is required');
+  }
+
+  const targetType = targetGene ? 'gene' : 'transcript';
+  const targetKey = targetGene || targetTranscript;
+
+  const primerArgs = {};
+  if (cliArgs['num-return'])       primerArgs.PRIMER_NUM_RETURN = parseInt(cliArgs['num-return'], 10);
+  if (cliArgs['min-tm'])           primerArgs.PRIMER_MIN_TM = parseFloat(cliArgs['min-tm']);
+  if (cliArgs['max-tm'])           primerArgs.PRIMER_MAX_TM = parseFloat(cliArgs['max-tm']);
+  if (cliArgs['opt-tm'])           primerArgs.PRIMER_OPT_TM = parseFloat(cliArgs['opt-tm']);
+  if (cliArgs['min-size'])         primerArgs.PRIMER_MIN_SIZE = parseInt(cliArgs['min-size'], 10);
+  if (cliArgs['max-size'])         primerArgs.PRIMER_MAX_SIZE = parseInt(cliArgs['max-size'], 10);
+  if (cliArgs['opt-size'])         primerArgs.PRIMER_OPT_SIZE = parseInt(cliArgs['opt-size'], 10);
+  if (cliArgs['min-gc'])           primerArgs.PRIMER_MIN_GC = parseFloat(cliArgs['min-gc']);
+  if (cliArgs['max-gc'])           primerArgs.PRIMER_MAX_GC = parseFloat(cliArgs['max-gc']);
+  if (cliArgs['product-min'] || cliArgs['product-max']) {
+    const pmin = parseInt(cliArgs['product-min'] || '80', 10);
+    const pmax = parseInt(cliArgs['product-max'] || '200', 10);
+    primerArgs.PRIMER_PRODUCT_SIZE_RANGE = `${pmin}-${pmax}`;
+  }
+
+  return {
+    genome,
+    annotations,
+    target_key: targetKey,
+    target_type: targetType,
+    primer_args: primerArgs,
+    max_amplicon: parseInt(cliArgs['max-amplicon'] || '2000', 10),
+    tnblast_timeout: parseInt(cliArgs['tntblast-timeout'] || '1800', 10),
+    pdf_output_dir: cliArgs['pdf-dir'] || null,
+  };
+}
+
+async function runCliPipeline(params) {
+  const bin = findSidecar();
+  let proc;
+  if (typeof bin === 'string') {
+    proc = spawn(bin, [], { stdio: ['pipe', 'pipe', 'pipe'] });
+  } else {
+    proc = spawn(bin.command, bin.args, { stdio: ['pipe', 'pipe', 'pipe'] });
+  }
+
+  const sidecarId = nextId++;
+
+  return new Promise((resolve, reject) => {
+    const rl = readline.createInterface({ input: proc.stdout });
+    rl.on('line', (line) => {
+      if (!line.trim()) return;
+      try {
+        const msg = JSON.parse(line);
+        if (msg.id !== sidecarId) return;
+        if (msg.status === 'progress') {
+          console.error(`[${msg.pct}%] ${msg.message}`);
+        } else if (msg.status === 'ok') {
+          resolve(msg.result);
+        } else if (msg.status === 'error') {
+          reject(new Error(msg.message));
+        }
+      } catch (e) {
+        console.error('Failed to parse sidecar output:', line, e);
+      }
+    });
+
+    proc.stderr.on('data', (chunk) => {
+      console.error('[sidecar]', chunk.toString().trimEnd());
+    });
+
+    proc.on('close', (code) => {
+      reject(new Error(`Pipeline process exited unexpectedly (code ${code}).`));
+    });
+
+    const request = JSON.stringify({
+      id: sidecarId, command: 'run_pipeline', params,
+    }) + '\n';
+    proc.stdin.write(request);
+    proc.stdin.end();
+  });
+}
 const pendingRequests = new Map();
 let nextId = 1;
 
@@ -156,6 +254,25 @@ function createWindow() {
 // ── IPC handlers ───────────────────────────────────────────────────
 
 app.whenReady().then(() => {
+  if (IS_CLI_MODE) {
+    try {
+      const cliArgs = parseCliArgs();
+      const params = buildPipelineParams(cliArgs);
+      runCliPipeline(params).then((result) => {
+        console.log(JSON.stringify(result, null, 2));
+        app.exit(0);
+      }).catch((err) => {
+        console.error(err.message);
+        app.exit(1);
+      });
+    } catch (err) {
+      console.error(err.message);
+      console.error('Usage: Brimer-PLAST.AppImage --cli --genome=<path> --annotations=<path> --target-gene=<name>');
+      app.exit(1);
+    }
+    return;
+  }
+
   createWindow();
 
   ipcMain.handle('select-file', async (_event, opts) => {

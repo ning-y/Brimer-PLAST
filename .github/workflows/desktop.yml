@@ -52,9 +52,9 @@ jobs:
           cd tnblast-src
           make \
             CC=g++ \
-            FLAGS="-O3 -Wall -std=c++14" \
+            FLAGS="-O3 -Wall -fopenmp -std=c++14" \
             LIBS="-lm -lz" \
-            OPENMP= \
+            OPENMP=-fopenmp \
             -j$(nproc)
 
       # Windows (MSYS2 setup + build)
