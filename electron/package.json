@@ -33,6 +33,11 @@
       {
         "from": "../dist/pybrimer.exe",
         "to": "pybrimer.exe"
+      },
+      {
+        "from": "../dist",
+        "to": ".",
+        "filter": ["tntblast*"]
       }
     ]
   }

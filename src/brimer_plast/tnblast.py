@@ -18,10 +18,16 @@ def _get_tntblast_path() -> str:
     """Determine the path to the tntblast executable.
 
     Priority:
-    1. If running inside a PyInstaller bundle, look in the bundle directory.
-    2. Otherwise, check if 'tntblast' is on the system PATH.
+    1. Environment variable TNTBLAST_PATH (set by Electron app wrapper).
+    2. If running inside a PyInstaller bundle, look in the bundle directory.
+    3. Otherwise, check if 'tntblast' is on the system PATH.
     """
     exe_name = "tntblast.exe" if os.name == "nt" else "tntblast"
+
+    # 0. Environment variable TNTBLAST_PATH (set by Electron app)
+    env_path = os.environ.get("TNTBLAST_PATH")
+    if env_path:
+        return env_path
 
     # 1. Check PyInstaller bundle directory (sys._MEIPASS)
     if hasattr(sys, "_MEIPASS"):

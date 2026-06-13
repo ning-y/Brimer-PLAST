@@ -20,6 +20,9 @@ pyinstaller \
   --add-binary "$TNT:." \
   sidecar.py
 
+echo "=== 3.5. Copy tnBLAST to dist/ for Electron resources ==="
+cp "$TNT" dist/
+
 echo "=== 4. Install npm deps ==="
 cd electron
 npm install --silent

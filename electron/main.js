@@ -133,11 +133,22 @@ function findSidecar() {
 
 function spawnSidecar() {
   const bin = findSidecar();
+
+  // Build tnBLAST path relative to app resources
+  const tntblastName = process.platform === 'win32' ? 'tntblast.exe' : 'tntblast';
+  const tntblastPath = path.join(process.resourcesPath, tntblastName);
+  const env = { ...process.env };
+  if (fs.existsSync(tntblastPath)) {
+    env.TNTBLAST_PATH = tntblastPath;
+  }
+
+  const spawnOpts = { stdio: ['pipe', 'pipe', 'pipe'], env };
+
   let proc;
   if (typeof bin === 'string') {
-    proc = spawn(bin, [], { stdio: ['pipe', 'pipe', 'pipe'] });
+    proc = spawn(bin, [], spawnOpts);
   } else {
-    proc = spawn(bin.command, bin.args, { stdio: ['pipe', 'pipe', 'pipe'] });
+    proc = spawn(bin.command, bin.args, spawnOpts);
   }
 
   const rl = readline.createInterface({ input: proc.stdout });

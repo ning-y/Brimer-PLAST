@@ -125,6 +125,10 @@ jobs:
             --add-binary "$TNT:." \
             sidecar.py
 
+      - name: Copy tnBLAST to dist/ for Electron resources
+        shell: bash
+        run: cp tnblast-src/tntblast* dist/
+
       - name: Verify PyInstaller bundle
         shell: bash
         run: ls -lh dist/pybrimer*

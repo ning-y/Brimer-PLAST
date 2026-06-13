@@ -34,6 +34,10 @@ echo "tnBLAST built: $TNTBLAST"
 cd /app
 pyinstaller --onefile --name pybrimer --add-binary "$TNTBLAST:." sidecar.py 2>&1 | tail -3
 
+# Copy tnBLAST to dist/ for Electron extraResources
+echo "Copying tnBLAST to dist/ for Electron packaging..."
+cp "$TNTBLAST" dist/
+
 # Verify pybrimer
 set +e
 echo '{"id":1,"command":"unknown","params":{}}' | timeout 5 ./dist/pybrimer 2>/dev/null
