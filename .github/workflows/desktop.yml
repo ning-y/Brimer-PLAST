@@ -30,7 +30,7 @@ jobs:
     name: Build — ${{ matrix.label }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # ── 1. Compile tnBLAST ──────────────────────────────────
       - name: Download tnBLAST source
@@ -105,7 +105,7 @@ jobs:
 
       # ── 2. PyInstaller bundle ───────────────────────────────
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -175,7 +175,7 @@ jobs:
         working-directory: electron
 
       - name: Upload installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: brimer-plast-${{ matrix.label }}
           path: electron/dist/${{ matrix.artifact-glob }}
