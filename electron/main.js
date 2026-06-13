@@ -55,7 +55,7 @@ function buildPipelineParams(cliArgs) {
     target_type: targetType,
     primer_args: primerArgs,
     max_amplicon: parseInt(cliArgs['max-amplicon'] || '2000', 10),
-    tnblast_timeout: parseInt(cliArgs['tntblast-timeout'] || '1800', 10),
+    tnblast_timeout: parseInt(cliArgs['tntblast-timeout'] || '3600', 10),
     pdf_output_dir: cliArgs['pdf-dir'] || null,
   };
 }
@@ -263,7 +263,7 @@ function parseTntblastTimeout() {
       if (!isNaN(val) && val > 0) return val;
     }
   }
-  return 1800;  // default 30 min
+  return 3600;  // default 60 min
 }
 
 // ── Window ─────────────────────────────────────────────────────────

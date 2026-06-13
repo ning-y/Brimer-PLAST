@@ -118,7 +118,7 @@ def run_pipeline(
     primer_args: dict[str, Any],
     max_amplicon: int = 2000,
     progress_callback: Callable[[int, str], None] | None = None,
-    tnblast_timeout: int = 1800,
+    tnblast_timeout: int = 3600,
     debug_dir: str | None = None,
     debug_log_callback: Callable[[dict], None] | None = None,
 ) -> PipelineResult:

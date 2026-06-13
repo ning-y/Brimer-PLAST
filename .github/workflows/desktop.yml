@@ -91,7 +91,7 @@ jobs:
             CC=g++ \
             FLAGS="-O3 -Wall -std=c++14 -static-libgcc -static-libstdc++ -include stdint.h" \
             LIBS="-lm -lz -static" \
-            OPENMP=
+            OPENMP=-fopenmp
 
       - name: Verify tnBLAST binary
         shell: bash
