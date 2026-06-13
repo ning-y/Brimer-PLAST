@@ -89,7 +89,7 @@ jobs:
           cd tnblast-src
           mingw32-make \
             CC=g++ \
-            FLAGS="-O3 -Wall -std=c++14 -static-libgcc -static-libstdc++ -include stdint.h" \
+            FLAGS="-O3 -Wall -fopenmp -std=c++14 -static-libgcc -static-libstdc++ -include stdint.h" \
             LIBS="-lm -lz -static" \
             OPENMP=-fopenmp
 
