@@ -6,163 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  # ── Job 1: tnBLAST binary per platform ──────────────────────
-  tntblast:
-    strategy:
-      matrix:
-        include:
-          - os: macos-14
-            label: macOS ARM
-            shell: bash
-          - os: windows-latest
-            label: Windows
-          - os: ubuntu-24.04
-            label: Linux
-
-    runs-on: ${{ matrix.os }}
-    name: tnBLAST — ${{ matrix.label }}
-
-    steps:
-      - name: Download tnBLAST source
-        shell: bash
-        run: |
-          curl -sL -o tnblast.tar.gz \
-            https://github.com/jgans/thermonucleotideBLAST/archive/refs/tags/v2.77.tar.gz
-          mkdir tnblast-src
-          tar xzf tnblast.tar.gz -C tnblast-src --strip-components=1
-
-      # macOS
-      - name: Compile (macOS)
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          cd tnblast-src
-          make \
-            CC=clang++ \
-            FLAGS="-O3 -Wall -std=c++14" \
-            LIBS="-lm -lz" \
-            OPENMP= \
-            -j$(sysctl -n hw.logicalcpu)
-
-      # Linux
-      - name: Compile (Linux)
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          cd tnblast-src
-          make \
-            CC=g++ \
-            FLAGS="-O3 -Wall -fopenmp -std=c++14" \
-            LIBS="-lm -lz" \
-            OPENMP=-fopenmp \
-            -j$(nproc)
-
-      # Windows (MSYS2 setup + build)
-      - name: Setup MSYS2
-        if: runner.os == 'Windows'
-        uses: msys2/setup-msys2@v2
-        with:
-          update: true
-          install: >-
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-zlib
-            mingw-w64-x86_64-make
-
-      - name: Patch source for MinGW
-        if: runner.os == 'Windows'
-        shell: msys2 {0}
-        run: |
-          cd tnblast-src
-          sed -i '/^template <class A>$/,/^}$/d' nuc_cruc.h
-
-      - name: Compile (Windows)
-        if: runner.os == 'Windows'
-        shell: msys2 {0}
-        run: |
-          cd tnblast-src
-          mingw32-make \
-            CC=g++ \
-            FLAGS="-O3 -Wall -std=c++14 -include stdint.h" \
-            LIBS="-lm -lz" \
-            OPENMP=
-
-      # Verify
-      - name: Check binary exists
-        shell: bash
-        run: |
-          for f in tnblast-src/tntblast.exe tnblast-src/tntblast; do
-            if [ -f "$f" ]; then echo "OK: found $f"; exit 0; fi
-          done
-          echo "FAIL: no tnBLAST binary found"
-          ls tnblast-src/
-          exit 1
-
-      - name: Upload tnBLAST binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: tntblast-${{ runner.os }}
-          path: tnblast-src/tntblast*
-          if-no-files-found: error
-
-  # ── Job 2: PyInstaller bundle per platform ──────────────────
-  pybrimer:
-    needs: tntblast
-    strategy:
-      matrix:
-        include:
-          - os: macos-14
-            label: macOS ARM
-          - os: windows-latest
-            label: Windows
-          - os: ubuntu-24.04
-            label: Linux
-    runs-on: ${{ matrix.os }}
-    name: PyInstaller — ${{ matrix.label }}
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install Python dependencies
-        run: |
-          pip install primer3-py pyinstaller -q
-          pip install -e . -q
-
-      - name: Download tnBLAST binary
-        uses: actions/download-artifact@v4
-        with:
-          name: tntblast-${{ runner.os }}
-          path: tntblast-bin/
-
-      - name: Build PyInstaller bundle
-        shell: bash
-        run: |
-          TNT=$(ls tntblast-bin/tntblast* | head -1)
-          pyinstaller \
-            --onefile \
-            --name pybrimer \
-            --collect-all primer3 \
-            --add-binary "$TNT:." \
-            sidecar.py
-
-      - name: Verify bundle
-        shell: bash
-        run: ls -lh dist/pybrimer*
-
-      - name: Upload PyInstaller bundle
-        uses: actions/upload-artifact@v4
-        with:
-          name: pybrimer-${{ runner.os }}
-          path: dist/pybrimer*
-          if-no-files-found: error
-
-  # ── Job 3: Electron installer per platform ──────────────────
-  electron:
-    needs: pybrimer
+  build:
     strategy:
       matrix:
         include:
@@ -181,12 +25,111 @@ jobs:
             builder-flag: --linux AppImage
             artifact-glob: '*.AppImage'
             sidecar-name: pybrimer
+
     runs-on: ${{ matrix.os }}
-    name: Electron — ${{ matrix.label }}
+    name: Build — ${{ matrix.label }}
 
     steps:
       - uses: actions/checkout@v4
 
+      # ── 1. Compile tnBLAST ──────────────────────────────────
+      - name: Download tnBLAST source
+        shell: bash
+        run: |
+          curl -sL -o tnblast.tar.gz \
+            https://github.com/jgans/thermonucleotideBLAST/archive/refs/tags/v2.77.tar.gz
+          mkdir tnblast-src
+          tar xzf tnblast.tar.gz -C tnblast-src --strip-components=1
+
+      - name: Compile tnBLAST (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          cd tnblast-src
+          make \
+            CC=clang++ \
+            FLAGS="-O3 -Wall -std=c++14" \
+            LIBS="-lm -lz" \
+            OPENMP= \
+            -j$(sysctl -n hw.logicalcpu)
+
+      - name: Compile tnBLAST (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          cd tnblast-src
+          make \
+            CC=g++ \
+            FLAGS="-O3 -Wall -fopenmp -std=c++14" \
+            LIBS="-lm -lz" \
+            OPENMP=-fopenmp \
+            -j$(nproc)
+
+      - name: Setup MSYS2 (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-make
+
+      - name: Patch source for MinGW
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          cd tnblast-src
+          sed -i '/^template <class A>$/,/^}$/d' nuc_cruc.h
+
+      - name: Compile tnBLAST (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          cd tnblast-src
+          mingw32-make \
+            CC=g++ \
+            FLAGS="-O3 -Wall -std=c++14 -include stdint.h" \
+            LIBS="-lm -lz" \
+            OPENMP=
+
+      - name: Verify tnBLAST binary
+        shell: bash
+        run: |
+          for f in tnblast-src/tntblast.exe tnblast-src/tntblast; do
+            if [ -f "$f" ]; then echo "OK: found $f"; exit 0; fi
+          done
+          echo "FAIL: no tnBLAST binary found"
+          ls tnblast-src/
+          exit 1
+
+      # ── 2. PyInstaller bundle ───────────────────────────────
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: |
+          pip install primer3-py pyinstaller -q
+          pip install -e . -q
+
+      - name: Build PyInstaller bundle
+        shell: bash
+        run: |
+          TNT=$(ls tnblast-src/tntblast* | head -1)
+          pyinstaller \
+            --onefile \
+            --name pybrimer \
+            --collect-all primer3 \
+            --add-binary "$TNT:." \
+            sidecar.py
+
+      - name: Verify PyInstaller bundle
+        shell: bash
+        run: ls -lh dist/pybrimer*
+
+      # ── 3. Electron installer ───────────────────────────────
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
@@ -196,13 +139,7 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libfuse2
 
-      - name: Download PyInstaller bundle
-        uses: actions/download-artifact@v4
-        with:
-          name: pybrimer-${{ runner.os }}
-          path: dist/
-
-      - name: Validate bundle exists
+      - name: Validate sidecar exists
         shell: bash
         run: |
           if [ ! -f "dist/${{ matrix.sidecar-name }}" ]; then

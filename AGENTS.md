@@ -123,3 +123,7 @@ Failed `edit` calls can still partially corrupt the file (e.g. appending garbage
 ### Prefer `read` over `rg --context` for edit targets
 
 `rg --context` shows matching lines but may display whitespace differently from the actual file. Always use `read` (which preserves the literal bytes) to get the text you paste into `edit`.
+
+## Scopes
+
+- **ci** — CI workflow definitions, build pipelines, artifact management
