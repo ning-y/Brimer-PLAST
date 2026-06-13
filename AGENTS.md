@@ -127,3 +127,4 @@ Failed `edit` calls can still partially corrupt the file (e.g. appending garbage
 ## Scopes
 
 - **ci** — CI workflow definitions, build pipelines, artifact management
+- **debug-archive** — Debug ZIP error-reporting system for Electron app

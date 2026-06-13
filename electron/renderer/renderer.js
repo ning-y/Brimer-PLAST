@@ -169,6 +169,13 @@
     errorEl.innerHTML = '<span class="error-tooltip"></span>';
     tdResults.appendChild(errorEl);
 
+    const debugLink = document.createElement('a');
+    debugLink.className = 'debug-archive-link';
+    debugLink.style.display = 'none';
+    debugLink.textContent = 'Something went wrong. Save this debug archive for troubleshooting.';
+    debugLink.href = '#';
+    tdResults.appendChild(debugLink);
+
     // Assemble row
     tr.appendChild(tdTarget);
     tr.appendChild(tdName);
@@ -296,6 +303,7 @@
         });
 
         requestId = runResult.requestId;
+        tr.dataset.requestId = requestId;
         const promise = runResult.promise;
 
         runningMap.set(requestId, tr);
@@ -322,9 +330,12 @@
           resultLink.style.cursor = 'default';
         }
       } catch (err) {
-        if (requestId) runningMap.delete(requestId);
+        const alreadyHandled = requestId ? !runningMap.delete(requestId) : false;
+        if (requestId) tr.dataset.requestId = requestId;
         statusEl.style.display = 'none';
-        showRowError(tr, err.message);
+        if (!alreadyHandled) {
+          showRowError(tr, err.message);
+        }
       }
     });
 
@@ -345,22 +356,37 @@
     return tabbables;
   }
 
-  function showRowError(tr, msg) {
+  function showRowError(tr, msg, debugZip) {
     const errorEl = tr.querySelector('.error-msg');
     const tooltip = errorEl.querySelector('.error-tooltip');
-    if (tooltip) tooltip.textContent = msg;
-    errorEl.style.display = 'inline';
-    // Auto-hide after 8 seconds
-    setTimeout(() => { errorEl.style.display = 'none'; }, 8000);
+    if (tooltip && msg !== null) tooltip.textContent = msg;
+    if (msg !== null) errorEl.style.display = 'inline';
+
+    // Persistent debug archive link (never auto-hides)
+    const debugLink = tr.querySelector('.debug-archive-link');
+    if (debugZip && debugLink) {
+      debugLink.dataset.zipPath = debugZip;
+      debugLink.style.display = 'inline';
+      // Replace to remove old click listeners
+      const newLink = debugLink.cloneNode(true);
+      debugLink.parentNode.replaceChild(newLink, debugLink);
+      newLink.addEventListener('click', function (e) {
+        e.preventDefault();
+        window.api.openDebugZip(this.dataset.zipPath);
+      });
+    }
   }
 
   function clearRowState(tr) {
     const statusEl = tr.querySelector('.status-text');
     const resultLink = tr.querySelector('.result-link');
     const errorEl = tr.querySelector('.error-msg');
+    const debugLink = tr.querySelector('.debug-archive-link');
+    delete tr.dataset.requestId;
     if (statusEl) { statusEl.style.display = 'none'; statusEl.textContent = ''; }
     if (resultLink) { resultLink.style.display = 'none'; resultLink.textContent = ''; resultLink.dataset.pdfPath = ''; }
     if (errorEl) { errorEl.style.display = 'none'; }
+    if (debugLink) { debugLink.style.display = 'none'; debugLink.dataset.zipPath = ''; }
   }
 
   // ── Global progress/error listeners ──────────────────────
@@ -375,9 +401,20 @@
     const row = runningMap.get(data._requestId);
     if (!row) return;
     runningMap.delete(data._requestId);
+    row.dataset.requestId = data._requestId;
     const statusEl = row.querySelector('.status-text');
     if (statusEl) statusEl.style.display = 'none';
-    showRowError(row, data.message || 'Unknown error');
+    showRowError(row, data.message || 'Unknown error', data.debug_zip || null);
+  });
+
+  // Delayed debug ZIP notification (e.g. from crash fallback).
+  // Uses data-request-id on the <tr> so it works even after runningMap
+  // entry was deleted by onError.
+  window.api.onDebugZip((data) => {
+    if (!data._requestId) return;
+    const row = document.querySelector('tr[data-request-id="' + data._requestId + '"]');
+    if (!row) return;
+    showRowError(row, null, data.debug_zip || null);
   });
 
   // ── Theme toggle ────────────────────────────────────────

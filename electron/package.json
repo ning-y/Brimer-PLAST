@@ -8,6 +8,9 @@
     "build:win": "electron-builder --win",
     "build:mac": "electron-builder --mac"
   },
+  "dependencies": {
+    "archiver": "^5.3.2"
+  },
   "devDependencies": {
     "electron": "33.1.0",
     "electron-builder": "25.1.8"

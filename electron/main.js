@@ -3,6 +3,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const readline = require('readline');
+const archiver = require('archiver');
 
 // ── CLI mode detection ────────────────────────────────────────────
 const IS_CLI_MODE = process.argv.includes('--cli');
@@ -151,7 +152,14 @@ function spawnSidecar() {
   });
 
   proc.stderr.on('data', (chunk) => {
-    console.error('[sidecar]', chunk.toString().trimEnd());
+    const str = chunk.toString();
+    console.error('[sidecar]', str.trimEnd());
+    // Accumulate stderr for all entries using this process
+    for (const [, entry] of pendingRequests) {
+      if (entry.process === proc) {
+        entry.stderr += str;
+      }
+    }
   });
 
   proc.on('close', (code) => {
@@ -166,6 +174,20 @@ function spawnSidecar() {
         });
         entry.reject(new Error(errMsg));
         pendingRequests.delete(sid);
+
+        // Fire-and-forget: create fallback ZIP and notify renderer when ready
+        if (entry.debugDir) {
+          createFallbackDebugZipAsync(entry.debugDir, entry.requestId, entry.stderr || '')
+            .then((zipPath) => {
+              if (zipPath) {
+                entry.event.sender.send('pipeline-debug-zip', {
+                  _requestId: entry.requestId,
+                  debug_zip: zipPath,
+                });
+              }
+            })
+            .catch((e) => console.error('Fallback ZIP creation failed:', e));
+        }
       }
     }
   });
@@ -198,6 +220,7 @@ function handleSidecarMessage(msg) {
       entry.event.sender.send('pipeline-error', {
         status: 'error',
         message: msg.message,
+        debug_zip: msg.debug_zip || null,
         _requestId: entry.requestId,
       });
       entry.reject(new Error(msg.message));
@@ -288,9 +311,11 @@ app.whenReady().then(() => {
   ipcMain.handle('run-pipeline', async (event, params) => {
     const { _requestId, pdf_output_dir, ...rest } = params;
     const reportsDir = path.join(app.getPath('userData'), 'reports');
+    const debugDir = path.join(app.getPath('userData'), 'debug-logs');
     const fullParams = {
       ...rest,
       pdf_output_dir: reportsDir,
+      debug_dir: debugDir,
       tnblast_timeout: parseTntblastTimeout(),
     };
 
@@ -298,7 +323,15 @@ app.whenReady().then(() => {
       const sidecarId = nextId++;
       const proc = spawnSidecar();
 
-      pendingRequests.set(sidecarId, { resolve, reject, event, process: proc, requestId: _requestId });
+      pendingRequests.set(sidecarId, {
+        resolve,
+        reject,
+        event,
+        process: proc,
+        requestId: _requestId,
+        debugDir,
+        stderr: '',
+      });
 
       const request = JSON.stringify({ id: sidecarId, command: 'run_pipeline', params: fullParams }) + '\n';
       proc.stdin.write(request);
@@ -310,6 +343,11 @@ app.whenReady().then(() => {
     shell.openPath(filePath);
   });
 
+  // ── Debug ZIP (opening from renderer) ─────────────────────────────────
+  ipcMain.handle('open-debug-zip', async (_event, filePath) => {
+    shell.openPath(filePath);
+  });
+
   app.on('window-all-closed', () => {
     killAllSidecars();
     if (process.platform !== 'darwin') app.quit();
@@ -317,3 +355,59 @@ app.whenReady().then(() => {
 
   app.on('before-quit', killAllSidecars);
 });
+
+
+// ── Fallback debug ZIP (async, Node.js side) ────────────────────────────────
+// Used when the sidecar crashes without writing an error response.  Collects
+// whatever files survive in the debug directory and bundles them into a ZIP.
+
+async function createFallbackDebugZipAsync(debugDir, requestId, stderrText) {
+  if (!debugDir) return null;
+  try {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const zipName = `debug_crash_${requestId}_${timestamp}.zip`;
+    const zipPath = path.join(debugDir, zipName);
+
+    await new Promise((resolve, reject) => {
+      const output = fs.createWriteStream(zipPath);
+      const archive = archiver('zip', { zlib: { level: 9 } });
+
+      output.on('close', resolve);
+      archive.on('error', reject);
+
+      archive.pipe(output);
+
+      // JSONL log (surviving partial log from sidecar)
+      const logPath = path.join(debugDir, `pipeline_${requestId}.jsonl`);
+      if (fs.existsSync(logPath)) {
+        archive.file(logPath, { name: 'pipeline_log.jsonl' });
+      }
+
+      // Sidecar stderr
+      archive.append(stderrText || '(no stderr captured)', { name: 'sidecar_stderr.txt' });
+
+      // System info
+      const sysInfo = [
+        `OS: ${process.platform} ${process.arch}`,
+        `Node.js: ${process.version}`,
+        `Electron: ${process.versions.electron}`,
+      ].join('\n') + '\n';
+      archive.append(sysInfo, { name: 'system_info.txt' });
+
+      // Any surviving debug artifacts
+      for (const fname of ['assays.txt', 'tntblast_genome.txt', 'tntblast_transcriptome.txt']) {
+        const fpath = path.join(debugDir, fname);
+        if (fs.existsSync(fpath)) {
+          archive.file(fpath, { name: fname });
+        }
+      }
+
+      archive.finalize();
+    });
+
+    return zipPath;
+  } catch (e) {
+    console.error('Failed to create fallback debug ZIP:', e);
+    return null;
+  }
+}

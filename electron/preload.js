@@ -28,6 +28,10 @@ contextBridge.exposeInMainWorld('api', {
   onError: (callback) => {
     ipcRenderer.on('pipeline-error', (_event, data) => callback(data));
   },
+  onDebugZip: (callback) => {
+    ipcRenderer.on('pipeline-debug-zip', (_event, data) => callback(data));
+  },
 
   openPdf: (filePath) => ipcRenderer.invoke('open-pdf', filePath),
+  openDebugZip: (filePath) => ipcRenderer.invoke('open-debug-zip', filePath),
 });

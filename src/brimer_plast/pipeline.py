@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -118,6 +119,8 @@ def run_pipeline(
     max_amplicon: int = 2000,
     progress_callback: Callable[[int, str], None] | None = None,
     tnblast_timeout: int = 1800,
+    debug_dir: str | None = None,
+    debug_log_callback: Callable[[dict], None] | None = None,
 ) -> PipelineResult:
     """Run the full Brimer-PLAST design + filter pipeline for one target.
 
@@ -136,6 +139,10 @@ def run_pipeline(
             long-running stages.  ``pct`` is an integer 0-100.
         tnblast_timeout: Maximum seconds for each tnBLAST call
             (default 1800 = 30 min).
+        debug_dir: Directory to copy debug artifacts into (assay file,
+            tnBLAST outputs).  If None, artifacts are not persisted.
+        debug_log_callback: Optional callback for structured debug log
+            events (e.g. tnBLAST start/done).
 
     Returns:
         A :class:`PipelineResult` with chains, filtered pairs, etc.
@@ -150,6 +157,10 @@ def run_pipeline(
     def _report(pct: int, msg: str) -> None:
         if progress_callback:
             progress_callback(pct, msg)
+
+    def _log_event(event: dict) -> None:
+        if debug_log_callback:
+            debug_log_callback(event)
 
     target_gene = target_key if target_type == "gene" else None
     target_transcript = target_key if target_type == "transcript" else None
@@ -285,6 +296,14 @@ def run_pipeline(
         try:
             genome_out = os.path.join(tmp_dir, "tntblast_genome.txt")
             _report(60, "Scanning genome with tnBLAST...")
+            _log_event({
+                "event": "tnblast_start",
+                "database": "genome",
+                "max_amplicon": max_amplicon,
+                "min_tm": primer_args.get("PRIMER_MIN_TM", 57.0),
+                "max_tm": primer_args.get("PRIMER_MAX_TM", 63.0),
+                "timeout": tnblast_timeout,
+            })
             genome_counts = run_tnblast(
                 assay_path,
                 genome,
@@ -294,10 +313,24 @@ def run_pipeline(
                 output_path=genome_out,
                 timeout=tnblast_timeout,
             )
+            _log_event({
+                "event": "tnblast_done",
+                "database": "genome",
+                "num_assays": len(genome_counts),
+                "total_hits": sum(genome_counts.values()),
+            })
             transcriptome_out = os.path.join(tmp_dir, "tntblast_transcriptome.txt")
             log.info("  tnBLAST genome scan complete")
             _report(70, "Scanning transcriptome with tnBLAST...")
-            run_tnblast(
+            _log_event({
+                "event": "tnblast_start",
+                "database": "transcriptome",
+                "max_amplicon": max_amplicon,
+                "min_tm": primer_args.get("PRIMER_MIN_TM", 57.0),
+                "max_tm": primer_args.get("PRIMER_MAX_TM", 63.0),
+                "timeout": tnblast_timeout,
+            })
+            transcriptome_counts = run_tnblast(
                 assay_path,
                 transcriptome_path,
                 max_amplicon=max_amplicon,
@@ -306,6 +339,12 @@ def run_pipeline(
                 output_path=transcriptome_out,
                 timeout=tnblast_timeout,
             )
+            _log_event({
+                "event": "tnblast_done",
+                "database": "transcriptome",
+                "num_assays": len(transcriptome_counts),
+                "total_hits": sum(transcriptome_counts.values()),
+            })
             log.info("  tnBLAST transcriptome scan complete")
         except (RuntimeError, FileNotFoundError):
             raise
@@ -389,6 +428,15 @@ def run_pipeline(
         log.warning("No primer pairs passed tnBLAST specificity filter.")
     else:
         log.info("%d/%d pairs passed filtering.", len(filtered), len(all_flat_pairs))
+
+    # ── Copy debug artifacts before temp dir cleanup ────────────────────
+    if debug_dir:
+        _debug_path = Path(debug_dir)
+        _debug_path.mkdir(parents=True, exist_ok=True)
+        for _src_name in ("assays.txt", "tntblast_genome.txt", "tntblast_transcriptome.txt"):
+            _src = os.path.join(tmp_dir, _src_name)
+            if os.path.exists(_src):
+                shutil.copy2(_src, _debug_path / _src_name)
 
     _report(95, "Processing results...")
 
