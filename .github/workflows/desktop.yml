@@ -89,8 +89,8 @@ jobs:
           cd tnblast-src
           mingw32-make \
             CC=g++ \
-            FLAGS="-O3 -Wall -std=c++14 -include stdint.h" \
-            LIBS="-lm -lz" \
+            FLAGS="-O3 -Wall -std=c++14 -static-libgcc -static-libstdc++ -include stdint.h" \
+            LIBS="-lm -lz -static" \
             OPENMP=
 
       - name: Verify tnBLAST binary
