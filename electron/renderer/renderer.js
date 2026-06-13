@@ -450,6 +450,14 @@
     }
   });
 
+  // ── Version badge ────────────────────────────────────────
+  window.api.getVersion().then(function (v) {
+    var el = document.getElementById('version-text');
+    if (el) el.textContent = 'v' + v;
+  }).catch(function () {
+    // silent — non-critical
+  });
+
   // ── Initial row ──────────────────────────────────────────
   createRow().querySelector('.target-type').focus();
   } catch (e) {

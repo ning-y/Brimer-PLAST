@@ -350,6 +350,8 @@ app.whenReady().then(() => {
     });
   });
 
+  ipcMain.handle('get-version', () => app.getVersion());
+
   ipcMain.handle('open-pdf', async (_event, filePath) => {
     shell.openPath(filePath);
   });

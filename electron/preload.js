@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('pipeline-debug-zip', (_event, data) => callback(data));
   },
 
+  getVersion: () => ipcRenderer.invoke('get-version'),
   openPdf: (filePath) => ipcRenderer.invoke('open-pdf', filePath),
   openDebugZip: (filePath) => ipcRenderer.invoke('open-debug-zip', filePath),
 });
