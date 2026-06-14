@@ -501,6 +501,14 @@
     }
   });
 
+  // ── App title (from src/brimer_plast/__init__.py APP_TITLE) ──
+  window.api.getAppTitle().then(function (title) {
+    var el = document.getElementById('app-title');
+    if (el) el.innerHTML = title;
+  }).catch(function () {
+    // silent — fallback to the HTML static content
+  });
+
   // ── Version badge ────────────────────────────────────────
   window.api.getVersion().then(function (v) {
     var el = document.getElementById('version-text');

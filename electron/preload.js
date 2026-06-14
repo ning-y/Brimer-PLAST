@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld('api', {
 
   cancelQueuedJob: (requestId) => ipcRenderer.invoke('cancel-queued-job', requestId),
 
+  getAppTitle: () => ipcRenderer.invoke('get-app-title'),
   getVersion: () => ipcRenderer.invoke('get-version'),
   openPdf: (filePath) => ipcRenderer.invoke('open-pdf', filePath),
   openDebugZip: (filePath) => ipcRenderer.invoke('open-debug-zip', filePath),

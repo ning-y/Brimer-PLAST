@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=68.0"]
+requires = ["setuptools>=68.0", "setuptools-scm>=8.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "brimer-plast"
-version = "0.1.0"
+dynamic = ["version"]
 description = "PCR primer design using primer3-py + tnBLAST"
 readme = "README.md"
 license = { text = "GPL-2.0-only" }
@@ -28,6 +28,9 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools_scm]
+fallback_version = "0.1.0"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

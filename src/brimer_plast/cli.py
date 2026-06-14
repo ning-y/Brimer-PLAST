@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import hashlib
-import subprocess
 from datetime import datetime
 from pathlib import Path
 
 import typer
 
+from brimer_plast import __version__
 from brimer_plast.genome import reverse_complement
 from brimer_plast.log_config import configure_logging, get_logger
 from brimer_plast.pdf_report import build_pdf_report
@@ -42,20 +42,6 @@ def calculate_md5(path: Path) -> str:
         for chunk in iter(lambda: f.read(4096), b""):
             hash_md5.update(chunk)
     return hash_md5.hexdigest()
-
-
-def get_git_version() -> str:
-    """Get the current git version string if available."""
-    try:
-        result = subprocess.run(
-            ["git", "describe", "--always", "--dirty"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return result.stdout.strip()
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return "0.1.0"
 
 
 def _run_for_target(
@@ -173,10 +159,9 @@ def _run_for_target(
         try:
             genome_md5 = calculate_md5(genome)
             annotations_md5 = calculate_md5(annotations)
-            version_str = get_git_version()
-
             build_pdf_report(
                 output_path=pdf_path,
+                version_str=__version__,
                 chains=chains,
                 locus=locus,
                 filtered_pairs=filtered,
@@ -186,7 +171,6 @@ def _run_for_target(
                 annotations_path=str(annotations),
                 genome_md5=genome_md5,
                 annotations_md5=annotations_md5,
-                version_str=version_str,
                 cli_args={
                     "target_gene": target_gene,
                     "target_transcript": target_transcript,
@@ -381,8 +365,6 @@ def main(
 
     genome_md5 = calculate_md5(genome)
     annotations_md5 = calculate_md5(annotations)
-    version_str = get_git_version()
-
     # ── Loop over each target (independent invocation) ─────────────────
     all_warnings: dict[str, list[str]] = {}
     for idx, (target_type, target_key) in enumerate(targets):

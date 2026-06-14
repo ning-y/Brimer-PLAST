@@ -29,6 +29,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from brimer_plast import APP_TITLE
 from brimer_plast.diagram import (
     TRANSCRIPT_CAP,
     _GeneDiagram,
@@ -62,7 +63,8 @@ def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, ta
     styles = getSampleStyleSheet()
 
     story = [
-        Paragraph("Brimer-PLAST Primer Design Report", styles["Title"]),
+        Paragraph(APP_TITLE, styles["Title"]),
+        Paragraph(f"v{version_str}", styles["Normal"]),
         HRFlowable(width="100%", color=colors.grey),
         Spacer(1, 8),
         Paragraph(f"Date: {datetime.now():%Y-%m-%d %H:%M:%S}", styles["Normal"]),
@@ -229,7 +231,7 @@ def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, ta
     story.append(Spacer(1, 15))
     story.append(Paragraph("Software Versions:", styles["Heading3"]))
     ver_lines = [
-        f"Brimer-PLAST: {version_str}",
+        f"Brimer-PLAST: v{version_str}",
         f"Python: {sys.version.split()[0]}",
     ]
     for vl in ver_lines:

@@ -6,6 +6,13 @@ open alternative to NCBI's Primer-BLAST.
 
 ## Language
 
+**App version string**:
+A PEP 440 compliant version string derived from git tags by setuptools-scm.
+``__version__`` lives in ``_version.py`` and is the single authority used by both
+the PDF report header and the Electron title bar (via a Python one-shot IPC call).
+Examples: ``0.1.0`` (at tag), ``0.1.0.dev3+ga1b2c3d`` (after tag).
+The Electron static fallback is ``0.1.0``.
+
 **Brimer-PLAST**:
 The tool itself. A wrapper that orchestrates primer3 (via primer3-py) and tnBLAST
 to produce specificity-filtered primer pairs from a user-supplied genome, annotation,

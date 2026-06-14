@@ -447,7 +447,31 @@ app.whenReady().then(() => {
     return true;
   });
 
-  ipcMain.handle('get-version', () => app.getVersion());
+  ipcMain.handle('get-app-title', async () => {
+    try {
+      const { execSync } = require('child_process');
+      const out = execSync('python3 -c "from brimer_plast import APP_TITLE; print(APP_TITLE)"', {
+        encoding: 'utf-8',
+        timeout: 10000,
+      });
+      return out.trim();
+    } catch (_) {
+      return 'Brimer-PLAST by Wang Linfa Lab';
+    }
+  });
+
+  ipcMain.handle('get-version', async () => {
+    try {
+      const { execSync } = require('child_process');
+      const out = execSync('python3 -c "from brimer_plast import __version__; print(__version__)"', {
+        encoding: 'utf-8',
+        timeout: 10000,
+      });
+      return out.trim();
+    } catch (_) {
+      return '0.1.0';
+    }
+  });
 
   ipcMain.handle('open-pdf', async (_event, filePath) => {
     shell.openPath(filePath);
