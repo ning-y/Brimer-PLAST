@@ -199,7 +199,14 @@ col.col-results { width: auto; }
 .result-cell .run-btn:disabled { background: var(--btn-disabled); cursor: not-allowed; }
 .result-cell .status-text {
   font-size: 0.82em; color: var(--status-text); margin: 3px 0;
+  display: inline;
 }
+.result-cell .cancel-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: 0.82em; padding: 0; margin: 0 0 0 6px;
+  color: var(--text); vertical-align: baseline; line-height: 1;
+}
+.result-cell .cancel-btn:hover { opacity: 0.7; }
 .result-cell .result-link {
   font-size: 0.82em; color: var(--result-link); cursor: pointer; text-decoration: underline;
 }

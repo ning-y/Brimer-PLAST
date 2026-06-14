@@ -108,6 +108,11 @@ async function runCliPipeline(params) {
 const pendingRequests = new Map();
 let nextId = 1;
 
+// ── Serial job queue ────────────────────────────────────────────────
+let sidecarProcess = null;
+let isProcessing = false;
+const jobQueue = [];
+
 function findSidecar() {
   const prodPathExe = path.join(process.resourcesPath, 'pybrimer.exe');
   const prodPath = path.join(process.resourcesPath, 'pybrimer');
@@ -174,7 +179,8 @@ function spawnSidecar() {
   });
 
   proc.on('close', (code) => {
-    // Find and reject all entries using this process
+    sidecarProcess = null;
+    // Reject the in-flight request (if any)
     for (const [sid, entry] of pendingRequests) {
       if (entry.process === proc) {
         const errMsg = `Pipeline process exited unexpectedly (code ${code}).`;
@@ -201,6 +207,19 @@ function spawnSidecar() {
         }
       }
     }
+    isProcessing = false;
+    // Reject all queued jobs — the sidecar is dead
+    const errMsg = `Pipeline process exited unexpectedly (code ${code}).`;
+    for (const entry of jobQueue) {
+      entry.event.sender.send('pipeline-error', {
+        status: 'error',
+        message: errMsg,
+        _requestId: entry.requestId,
+      });
+      entry.reject(new Error(errMsg));
+    }
+    jobQueue.length = 0;
+    broadcastQueueStatus();
   });
 
   return proc;
@@ -221,13 +240,14 @@ function handleSidecarMessage(msg) {
       });
       break;
     case 'ok':
-      entry.process.kill();
       pendingRequests.delete(msg.id);
+      isProcessing = false;
       entry.resolve(msg.result);
+      processNextInQueue();
       break;
     case 'error':
-      entry.process.kill();
       pendingRequests.delete(msg.id);
+      isProcessing = false;
       entry.event.sender.send('pipeline-error', {
         status: 'error',
         message: msg.message,
@@ -235,6 +255,7 @@ function handleSidecarMessage(msg) {
         _requestId: entry.requestId,
       });
       entry.reject(new Error(msg.message));
+      processNextInQueue();
       break;
   }
 }
@@ -246,6 +267,18 @@ function cancelAllForEvent(event) {
       pendingRequests.delete(sid);
     }
   }
+  // Also drain the queue for this sender
+  const remaining = [];
+  for (const entry of jobQueue) {
+    if (entry.event.sender === event.sender) {
+      entry.reject(new Error('__CANCELLED__'));
+    } else {
+      remaining.push(entry);
+    }
+  }
+  jobQueue.length = 0;
+  jobQueue.push(...remaining);
+  broadcastQueueStatus();
 }
 
 function killAllSidecars() {
@@ -253,6 +286,74 @@ function killAllSidecars() {
     entry.process.kill();
   }
   pendingRequests.clear();
+  // Drain the queue
+  for (const entry of jobQueue) {
+    entry.reject(new Error('__CANCELLED__'));
+  }
+  jobQueue.length = 0;
+  if (sidecarProcess) {
+    sidecarProcess.kill();
+    sidecarProcess = null;
+  }
+  isProcessing = false;
+}
+
+// ── Serial job queue management ─────────────────────────────────
+
+function processNextInQueue() {
+  if (isProcessing) return;
+  if (jobQueue.length === 0) {
+    killSidecarIfIdle();
+    return;
+  }
+
+  isProcessing = true;
+
+  if (!sidecarProcess) {
+    sidecarProcess = spawnSidecar();
+  }
+
+  const entry = jobQueue.shift();
+  const sidecarId = nextId++;
+
+  pendingRequests.set(sidecarId, {
+    resolve: entry.resolve,
+    reject: entry.reject,
+    event: entry.event,
+    process: sidecarProcess,
+    requestId: entry.requestId,
+    debugDir: entry.debugDir,
+    stderr: '',
+  });
+
+  const request = JSON.stringify({ id: sidecarId, command: 'run_pipeline', params: entry.params }) + '\n';
+  sidecarProcess.stdin.write(request);
+  broadcastQueueStatus();
+}
+
+function broadcastQueueStatus() {
+  const entries = [];
+  // Running job (no position — not in the queue)
+  for (const [sid, entry] of pendingRequests) {
+    entries.push({ requestId: entry.requestId, status: 'running' });
+  }
+  // Queued jobs — position is 1-based within the queue
+  let pos = 1;
+  const total = jobQueue.length;
+  for (const entry of jobQueue) {
+    entries.push({ requestId: entry.requestId, status: 'queued', position: pos, total: total });
+    pos++;
+  }
+  BrowserWindow.getAllWindows().forEach(win => {
+    win.webContents.send('queue-status', entries);
+  });
+}
+
+function killSidecarIfIdle() {
+  if (sidecarProcess && pendingRequests.size === 0 && jobQueue.length === 0) {
+    sidecarProcess.kill();
+    sidecarProcess = null;
+  }
 }
 
 // ── Custom CLI argument parsing ────────────────────────────────
@@ -331,23 +432,19 @@ app.whenReady().then(() => {
     };
 
     return new Promise((resolve, reject) => {
-      const sidecarId = nextId++;
-      const proc = spawnSidecar();
-
-      pendingRequests.set(sidecarId, {
-        resolve,
-        reject,
-        event,
-        process: proc,
-        requestId: _requestId,
-        debugDir,
-        stderr: '',
-      });
-
-      const request = JSON.stringify({ id: sidecarId, command: 'run_pipeline', params: fullParams }) + '\n';
-      proc.stdin.write(request);
-      proc.stdin.end();
+      jobQueue.push({ resolve, reject, event, params: fullParams, requestId: _requestId, debugDir });
+      processNextInQueue();
+      broadcastQueueStatus();
     });
+  });
+
+  ipcMain.handle('cancel-queued-job', (_event, requestId) => {
+    const idx = jobQueue.findIndex(e => e.requestId === requestId);
+    if (idx === -1) return false;
+    const [entry] = jobQueue.splice(idx, 1);
+    entry.resolve({ cancelled: true });
+    broadcastQueueStatus();
+    return true;
   });
 
   ipcMain.handle('get-version', () => app.getVersion());

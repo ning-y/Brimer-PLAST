@@ -31,6 +31,11 @@ contextBridge.exposeInMainWorld('api', {
   onDebugZip: (callback) => {
     ipcRenderer.on('pipeline-debug-zip', (_event, data) => callback(data));
   },
+  onQueueUpdate: (callback) => {
+    ipcRenderer.on('queue-status', (_event, entries) => callback(entries));
+  },
+
+  cancelQueuedJob: (requestId) => ipcRenderer.invoke('cancel-queued-job', requestId),
 
   getVersion: () => ipcRenderer.invoke('get-version'),
   openPdf: (filePath) => ipcRenderer.invoke('open-pdf', filePath),

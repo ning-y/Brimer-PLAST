@@ -176,6 +176,13 @@
     debugLink.href = '#';
     tdResults.appendChild(debugLink);
 
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'cancel-btn';
+    cancelBtn.textContent = '✕';
+    cancelBtn.title = 'Cancel queued job';
+    cancelBtn.style.display = 'none';
+    tdResults.appendChild(cancelBtn);
+
     // Assemble row
     tr.appendChild(tdTarget);
     tr.appendChild(tdName);
@@ -238,6 +245,9 @@
       }
     });
 
+    // Shared across Run and Cancel handlers
+    let requestId;
+
     // ── Run button ────────────────────────────────
     runBtn.addEventListener('click', async () => {
       if (runBtn.disabled) return;
@@ -258,8 +268,9 @@
 
       clearRowState(tr);
       runBtn.style.display = 'none';
-      statusEl.style.display = 'block';
-      statusEl.textContent = 'Starting…';
+      cancelBtn.style.display = 'none';
+      statusEl.style.display = '';  // let CSS display:inline take effect
+      statusEl.textContent = ''; // Set by queue-status event
 
       const targetType = sel.value;
 
@@ -289,10 +300,11 @@
       primerArgs.PRIMER_PRODUCT_SIZE_RANGE = `${productMin}-${productMax}`;
       const maxAmplicon = parseFloat(panel.querySelector('[data-key="max-amplicon"]').value) || 2000;
 
-      let requestId;
-
       try {
-        const runResult = await window.api.runPipeline({
+        // Don't await runPipeline() — extract requestId synchronously so
+        // data-request-id and runningMap are set before the event loop
+        // processes the first queue-status IPC event from main.
+        const runResult = window.api.runPipeline({
           genome: genomePath,
           annotations: gtfPath,
           target_key: name,
@@ -310,6 +322,13 @@
 
         const result = await promise;
         runningMap.delete(requestId);
+        cancelBtn.style.display = 'none';
+
+        if (result && result.cancelled) {
+          // Cancelled from queue — row stays locked, shows cancelled
+          statusEl.textContent = 'Cancelled';
+          return;
+        }
 
         statusEl.style.display = 'none';
 
@@ -332,11 +351,19 @@
       } catch (err) {
         const alreadyHandled = requestId ? !runningMap.delete(requestId) : false;
         if (requestId) tr.dataset.requestId = requestId;
+        cancelBtn.style.display = 'none';
         statusEl.style.display = 'none';
         if (!alreadyHandled) {
           showRowError(tr, err.message);
         }
       }
+    });
+
+    // ── Cancel button ─────────────────────────────
+    cancelBtn.addEventListener('click', () => {
+      window.api.cancelQueuedJob(requestId).catch(() => {});
+      // The run-pipeline promise will reject with '__CANCELLED__' and the
+      // catch handler above resets the row.
     });
 
     return tr;
@@ -382,11 +409,13 @@
     const resultLink = tr.querySelector('.result-link');
     const errorEl = tr.querySelector('.error-msg');
     const debugLink = tr.querySelector('.debug-archive-link');
+    const cancelBtn = tr.querySelector('.cancel-btn');
     delete tr.dataset.requestId;
     if (statusEl) { statusEl.style.display = 'none'; statusEl.textContent = ''; }
     if (resultLink) { resultLink.style.display = 'none'; resultLink.textContent = ''; resultLink.dataset.pdfPath = ''; }
     if (errorEl) { errorEl.style.display = 'none'; }
     if (debugLink) { debugLink.style.display = 'none'; debugLink.dataset.zipPath = ''; }
+    if (cancelBtn) { cancelBtn.style.display = 'none'; }
   }
 
   // ── Global progress/error listeners ──────────────────────
@@ -415,6 +444,28 @@
     const row = document.querySelector('tr[data-request-id="' + data._requestId + '"]');
     if (!row) return;
     showRowError(row, null, data.debug_zip || null);
+  });
+
+  // ── Queue status updates ─────────────────────────
+  window.api.onQueueUpdate((entries) => {
+    entries.forEach(function (queueEntry) {
+      var row = document.querySelector('tr[data-request-id="' + queueEntry.requestId + '"]');
+      if (!row) return;
+      var statusEl = row.querySelector('.status-text');
+      var cancelBtn = row.querySelector('.cancel-btn');
+      if (!statusEl) return;
+
+      if (queueEntry.status === 'running') {
+        if (cancelBtn) cancelBtn.style.display = 'none';
+        // Don't overwrite progress messages; only set if still empty
+        if (statusEl.textContent === '' || statusEl.textContent.indexOf('Queued') === 0) {
+          statusEl.textContent = 'Starting…';
+        }
+      } else if (queueEntry.status === 'queued') {
+        statusEl.textContent = 'Queued (' + queueEntry.position + ' of ' + queueEntry.total + ')';
+        if (cancelBtn) cancelBtn.style.display = 'inline';
+      }
+    });
   });
 
   // ── Theme toggle ────────────────────────────────────────
