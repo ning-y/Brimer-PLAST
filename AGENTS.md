@@ -128,6 +128,7 @@ Failed `edit` calls can still partially corrupt the file (e.g. appending garbage
 
 - **ci** — CI workflow definitions, build pipelines, artifact management
 - **debug-archive** — Debug ZIP error-reporting system for Electron app
+- **pdf-report** — PDF report layout, diagram drawing, and sequence rendering
 - **electron** — Electron main-process runtime, sidecar process lifecycle, and IPC message handling
 - **electron-packaging** — Electron app bundling, electron-builder config, sidecar resource discovery
 - **electron-ui** — Electron renderer UI, branding, header, theme, version display

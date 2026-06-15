@@ -394,7 +394,7 @@ def draw_gene_diagram(
 # ── Flowables ────────────────────────────────────────────────────────────────
 
 class _SequenceRow(Flowable):
-    """Draws a single 100-base row of DNA sequence with indices and highlights."""
+    """Draws a single 100-base row of DNA sequence with indices."""
     def __init__(self, sequence: str, start_index: int, pairs: list[PrimerPair]):
         super().__init__()
         self.sequence = sequence
@@ -413,54 +413,6 @@ class _SequenceRow(Flowable):
 
         seq = self.sequence
         idx = self.start_index
-
-        f_hits: dict[int, set[int]] = {}
-        r_hits: dict[int, set[int]] = {}
-
-        for p in self.pairs:
-            pnum = p.pair_number or 0
-            if p.forward_start is not None and p.forward_len is not None:
-                for pos in range(p.forward_start + 1, p.forward_start + p.forward_len + 1):
-                    f_hits.setdefault(pos, set()).add(pnum)
-            if p.reverse_start is not None and p.reverse_len is not None:
-                for pos in range(p.reverse_start - p.reverse_len + 2, p.reverse_start + 2):
-                    r_hits.setdefault(pos, set()).add(pnum)
-
-        for i in range(len(seq)):
-            pos = idx + i
-            f_ids = f_hits.get(pos, set())
-            r_ids = r_hits.get(pos, set())
-
-            if not f_ids and not r_ids:
-                continue
-
-            tx = 40 + i * char_w + (i // 20) * char_w
-
-            if f_ids:
-                canv.setFillColor(colors.Color(1, 1, 0, alpha=0.5))
-                canv.rect(tx, 0.5 * self.line_h - 2, char_w, self.line_h, fill=1, stroke=0)
-
-            if r_ids:
-                canv.setFillColor(colors.Color(0, 1, 0, alpha=0.5))
-                canv.rect(tx, 0.5 * self.line_h - 2, char_w, self.line_h, fill=1, stroke=0)
-
-        canv.setFont("Helvetica", 4)
-        for i in range(len(seq)):
-            pos = idx + i
-            ids = sorted(f_hits.get(pos, set()) | r_hits.get(pos, set()))
-            if not ids:
-                continue
-
-            label = ",".join(map(str, ids))
-
-            next_pos = pos + 1
-            next_ids = sorted(f_hits.get(next_pos, set()) | r_hits.get(next_pos, set()))
-            next_label = ",".join(map(str, next_ids))
-
-            if label != next_label:
-                tx = 40 + i * char_w + (i // 20) * char_w
-                canv.setFillColor(colors.black)
-                canv.drawString(tx + char_w - 1, 1.5 * self.line_h - 1, label)
 
         canv.setFont("Courier", 8)
         canv.setFillColor(colors.grey)
