@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Any, Callable
 
 from brimer_plast.filter import filter_specific_pairs
-from brimer_plast.tnblast import AmpliconHit, _parse_tnblast_amplicons, run_tnblast, write_assay_file
 from brimer_plast.genome import (
     build_transcript_to_gene_map,
     build_transcriptome_fasta,
@@ -31,7 +30,13 @@ from brimer_plast.models import (
     GeneLocus,
     PrimerPair,
 )
-from brimer_plast.primer import design_primers, design_primers_dual_mode, dedup_and_prioritize
+from brimer_plast.primer import dedup_and_prioritize, design_primers_dual_mode
+from brimer_plast.tnblast import (
+    AmpliconHit,
+    _parse_tnblast_amplicons,
+    run_tnblast,
+    write_assay_file,
+)
 
 
 @dataclass
@@ -90,12 +95,8 @@ def _compute_tnblast_fragments(
             r_g_start = hit.amplicon_end - r_len + 2
             r_g_end = hit.amplicon_end + 1
 
-        pair.tnblast_forward_fragments = genomic_range_to_fragments(
-            f_g_start, f_g_end, exons
-        )
-        pair.tnblast_reverse_fragments = genomic_range_to_fragments(
-            r_g_start, r_g_end, exons
-        )
+        pair.tnblast_forward_fragments = genomic_range_to_fragments(f_g_start, f_g_end, exons)
+        pair.tnblast_reverse_fragments = genomic_range_to_fragments(r_g_start, r_g_end, exons)
 
     elif name in transcriptome_amplicons and transcriptome_amplicons[name]:
         hit = transcriptome_amplicons[name][0]
@@ -208,8 +209,12 @@ def run_pipeline(
         log.warning(msg)
         pipeline_warnings.append(msg)
 
-    log.info("Found %d conserved exon chain(s) (%d multi-exon, %d single-exon)",
-              len(chains), len(multi_exon_chains), len(single_exon_chains))
+    log.info(
+        "Found %d conserved exon chain(s) (%d multi-exon, %d single-exon)",
+        len(chains),
+        len(multi_exon_chains),
+        len(single_exon_chains),
+    )
     _report(20, f"Designing primers for {len(multi_exon_chains)} chain(s)...")
 
     # ── Step 2: Design candidate primers (dual-mode) ──────────────────────
@@ -244,9 +249,9 @@ def run_pipeline(
     all_flat_pairs = junction_candidates + intron_candidates
     if not all_flat_pairs:
         msg = (
-            f"No candidate primers could be designed for any chain. "
-            f"The target may consist only of single-exon transcripts, "
-            f"or the design constraints may be too strict."
+            "No candidate primers could be designed for any chain. "
+            "The target may consist only of single-exon transcripts, "
+            "or the design constraints may be too strict."
         )
         log.warning(msg)
         pipeline_warnings.append(msg)
@@ -260,15 +265,19 @@ def run_pipeline(
             warnings=pipeline_warnings,
         )
 
-    log.info("Total: %d candidate pair(s) (%d junction, %d intron).",
-              len(all_flat_pairs), len(junction_candidates), len(intron_candidates))
+    log.info(
+        "Total: %d candidate pair(s) (%d junction, %d intron).",
+        len(all_flat_pairs),
+        len(junction_candidates),
+        len(intron_candidates),
+    )
     _report(40, f"Primer design complete: {len(all_flat_pairs)} candidate pair(s)")
 
     # ── Step 2.5: Compute pair names ───────────────────────────────────────
     chain_map = {c.id: c for c in chains}
     for pair in all_flat_pairs:
         chain = chain_map[pair.chain_id]
-        short_tid = chain.representative_tid[-chain.short_tid_length:]
+        short_tid = chain.representative_tid[-chain.short_tid_length :]
         if (
             pair.forward_start is not None
             and pair.forward_len is not None
@@ -289,21 +298,21 @@ def run_pipeline(
 
         _report(50, "Building transcriptome FASTA...")
         transcriptome_path = os.path.join(tmp_dir, "transcriptome.fa")
-        transcript_exon_map = build_transcriptome_fasta(
-            genome, annotations, transcriptome_path
-        )
+        transcript_exon_map = build_transcriptome_fasta(genome, annotations, transcriptome_path)
 
         try:
             genome_out = os.path.join(tmp_dir, "tntblast_genome.txt")
             _report(60, "Scanning genome with tnBLAST...")
-            _log_event({
-                "event": "tnblast_start",
-                "database": "genome",
-                "max_amplicon": max_amplicon,
-                "min_tm": primer_args.get("PRIMER_MIN_TM", 57.0),
-                "max_tm": primer_args.get("PRIMER_MAX_TM", 63.0),
-                "timeout": tnblast_timeout,
-            })
+            _log_event(
+                {
+                    "event": "tnblast_start",
+                    "database": "genome",
+                    "max_amplicon": max_amplicon,
+                    "min_tm": primer_args.get("PRIMER_MIN_TM", 57.0),
+                    "max_tm": primer_args.get("PRIMER_MAX_TM", 63.0),
+                    "timeout": tnblast_timeout,
+                }
+            )
             genome_counts = run_tnblast(
                 assay_path,
                 genome,
@@ -313,23 +322,27 @@ def run_pipeline(
                 output_path=genome_out,
                 timeout=tnblast_timeout,
             )
-            _log_event({
-                "event": "tnblast_done",
-                "database": "genome",
-                "num_assays": len(genome_counts),
-                "total_hits": sum(genome_counts.values()),
-            })
+            _log_event(
+                {
+                    "event": "tnblast_done",
+                    "database": "genome",
+                    "num_assays": len(genome_counts),
+                    "total_hits": sum(genome_counts.values()),
+                }
+            )
             transcriptome_out = os.path.join(tmp_dir, "tntblast_transcriptome.txt")
             log.info("  tnBLAST genome scan complete")
             _report(70, "Scanning transcriptome with tnBLAST...")
-            _log_event({
-                "event": "tnblast_start",
-                "database": "transcriptome",
-                "max_amplicon": max_amplicon,
-                "min_tm": primer_args.get("PRIMER_MIN_TM", 57.0),
-                "max_tm": primer_args.get("PRIMER_MAX_TM", 63.0),
-                "timeout": tnblast_timeout,
-            })
+            _log_event(
+                {
+                    "event": "tnblast_start",
+                    "database": "transcriptome",
+                    "max_amplicon": max_amplicon,
+                    "min_tm": primer_args.get("PRIMER_MIN_TM", 57.0),
+                    "max_tm": primer_args.get("PRIMER_MAX_TM", 63.0),
+                    "timeout": tnblast_timeout,
+                }
+            )
             transcriptome_counts = run_tnblast(
                 assay_path,
                 transcriptome_path,
@@ -339,12 +352,14 @@ def run_pipeline(
                 output_path=transcriptome_out,
                 timeout=tnblast_timeout,
             )
-            _log_event({
-                "event": "tnblast_done",
-                "database": "transcriptome",
-                "num_assays": len(transcriptome_counts),
-                "total_hits": sum(transcriptome_counts.values()),
-            })
+            _log_event(
+                {
+                    "event": "tnblast_done",
+                    "database": "transcriptome",
+                    "num_assays": len(transcriptome_counts),
+                    "total_hits": sum(transcriptome_counts.values()),
+                }
+            )
             log.info("  tnBLAST transcriptome scan complete")
         except (RuntimeError, FileNotFoundError):
             raise
@@ -392,7 +407,9 @@ def run_pipeline(
 
         # Merge, deduplicate, prioritise junction over intron
         filtered = dedup_and_prioritize(
-            filtered_junction, filtered_intron, max_pairs=num_return,
+            filtered_junction,
+            filtered_intron,
+            max_pairs=num_return,
         )
 
         # Assign pair numbers
@@ -420,8 +437,13 @@ def run_pipeline(
             if pair.chain_id in chain_map:
                 exons = chain_map[pair.chain_id].exons
                 _compute_tnblast_fragments(
-                    pair, name, exons, locus,
-                    genome_amplicons, transcriptome_amplicons, transcript_exon_map,
+                    pair,
+                    name,
+                    exons,
+                    locus,
+                    genome_amplicons,
+                    transcriptome_amplicons,
+                    transcript_exon_map,
                 )
 
     if not filtered:
@@ -467,7 +489,6 @@ def dump_debug_info(
     chains = result.chains
     locus = result.locus
     filtered_pairs = result.filtered_pairs
-    all_flat_pairs = result.all_candidates
     junction_candidates = result.junction_candidates
     intron_candidates = result.intron_candidates
 
@@ -539,13 +560,23 @@ def dump_debug_info(
         log.debug(f"  Pair {pnum} (chain: {pair.chain_id})")
         log.debug(f"    Product size: {pair.product_size}  Penalty: {pair.pair_penalty}")
         log.debug(f"    Forward ({pair.forward_len} bp): {pair.forward_seq}")
-        log.debug(f"      Primer3 (blue): {[(f.seqid, f.start, f.end) for f in pair.primer3_forward_fragments]}")
-        log.debug(f"      tnBLAST (red):  {[(f.seqid, f.start, f.end) for f in pair.tnblast_forward_fragments]}")
+        log.debug(
+            f"      Primer3 (blue): {[(f.seqid, f.start, f.end) for f in pair.primer3_forward_fragments]}"  # noqa: E501
+        )
+        log.debug(
+            f"      tnBLAST (red):  {[(f.seqid, f.start, f.end) for f in pair.tnblast_forward_fragments]}"  # noqa: E501
+        )
         log.debug(f"    Reverse ({pair.reverse_len} bp): {pair.reverse_seq}")
-        log.debug(f"      Primer3 (blue): {[(f.seqid, f.start, f.end) for f in pair.primer3_reverse_fragments]}")
-        log.debug(f"      tnBLAST (red):  {[(f.seqid, f.start, f.end) for f in pair.tnblast_reverse_fragments]}")
+        log.debug(
+            f"      Primer3 (blue): {[(f.seqid, f.start, f.end) for f in pair.primer3_reverse_fragments]}"  # noqa: E501
+        )
+        log.debug(
+            f"      tnBLAST (red):  {[(f.seqid, f.start, f.end) for f in pair.tnblast_reverse_fragments]}"  # noqa: E501
+        )
         if pair.forward_start is not None and pair.forward_len is not None:
-            log.debug(f"      Forward template 1-based: {pair.forward_start + 1}-{pair.forward_start + pair.forward_len}")
+            log.debug(
+                f"      Forward template 1-based: {pair.forward_start + 1}-{pair.forward_start + pair.forward_len}"  # noqa: E501
+            )
         if pair.reverse_start is not None and pair.reverse_len is not None:
             r1 = pair.reverse_start - pair.reverse_len + 2
             r2 = pair.reverse_start + 1

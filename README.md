@@ -1,72 +1,13 @@
 # Brimer-PLAST
 
-Design qRT-PCR primers that span exon-exon junctions using primer3 and tnBLAST.
+Brimer-PLAST designs primers for genes on custom genomes, specifically filtering against off-target hits.
 
-Named as a local, open alternative to [NCBI Primer-BLAST](https://www.ncbi.nlm.nih.gov/tools/primer-blast/).
+These primer pairs are designed for qRT-PCR in mind.
+In a primer pair,
 
-Primers are designed in two automatic modes:
-- **Junction mode** — at least one primer overlaps an exon-exon junction
-- **Intron mode** — forward and reverse primers fall on different exons with
-  a total intronic separation >1000 bp
-Results are deduplicated by primer sequence, with junction pairs given priority.
-
-## Quick start
-
-```bash
-# Docker
-docker build -t brimer-plast .
-docker run --rm -v /path/to/genomes:/data brimer-plast \
-  --genome /data/genome.fna \
-  --annotations /data/annotations.gtf \
-  --target-gene GAPDH
-
-# Native (requires tnBLAST on PATH and primer3-py installed)
-pip install .
-brimer-plast --genome genome.fna --annotations annotations.gtf --target-gene GAPDH
-
-# Nix dev shell (includes tnBLAST + Python)
-nix develop
-brimer-plast --genome genome.fna --annotations annotations.gtf --target-gene homt-1
-```
-
-## Full usage
-
-```
-brimer-plast --genome <FASTA> --annotations <GTF> <--target-gene | --target-transcript> [options]
-```
-
-Required:
-- `--genome` / `-g` — Genome FASTA file
-- `--annotations` / `-a` — Gene annotation GTF file
-- `--target-gene` or `--target-transcript` — Which gene/transcript to design primers for
-  (repeatable: `--target-gene GAPDH --target-gene ACTB` for multiple targets)
-
-Primer design options:
-- `--num-return` / `-n` — Number of candidate pairs per conserved exon chain (default: 50)
-- `--min-tm`, `--max-tm`, `--opt-tm` — Melting temperature range (default: 57/63/60 °C)
-- `--min-size`, `--max-size`, `--opt-size` — Primer length (default: 18/25/20 bp)
-- `--min-gc`, `--max-gc` — GC content percent (default: 40/60%)
-- `--product-min`, `--product-max` — Amplicon size range (default: 80-200 bp)
-- `--max-amplicon` — Maximum tnBLAST amplicon search length (default: 2000)
-
-Output options:
-- `--output-pdf <path>` — Write a PDF report with per-chain genome views.
-  Repeat once per target for multi-target runs
-  (e.g. `--output-pdf gapdh.pdf --output-pdf actb.pdf`).
-  If omitted, a report is auto-generated; use `--no-pdf` to suppress.
-- `--no-pdf` — Suppress PDF report generation entirely.
-- `--verbose` / `-v` — Increase verbosity. `-v` for pipeline progress,
-  `-vv` for per-pair fragment-list details and template coordinates.
-- `--tsv` — Tab-separated machine-readable output
-
-## Electron Desktop App (Beta)
-
-Brimer-PLAST includes an experimental Electron-based desktop GUI.
-
-To run in development (requires Nix):
-```bash
-nix develop --command bash -c "cd electron && electron . --no-sandbox"
-```
+- Primers target cDNA sequences present in all annotated transcripts of that gene, and
+- At least one primer overlaps an exon-exon junction, or
+- Forward and reverse primers fall on different exons with a total intronic separation >1000 bp
 
 ## How it works
 
@@ -132,6 +73,68 @@ nix develop --command bash -c "cd electron && electron . --no-sandbox"
   mitochondrial genes) have no junctions and no introns.  Neither design
   mode can produce primers for these targets.
 
+## Command line interface
+
+Brimer-PLAST is distributed primarily as an Electron app.
+However, it was originally designed as a command line tool.
+That interface still exists:
+
+### Quick start
+
+```bash
+# Docker
+docker build -t brimer-plast .
+docker run --rm -v /path/to/genomes:/data brimer-plast \
+  --genome /data/genome.fna \
+  --annotations /data/annotations.gtf \
+  --target-gene GAPDH
+
+# Native (requires tnBLAST on PATH and primer3-py installed)
+pip install .
+brimer-plast --genome genome.fna --annotations annotations.gtf --target-gene GAPDH
+
+# Nix dev shell (includes tnBLAST + Python)
+nix develop
+brimer-plast --genome genome.fna --annotations annotations.gtf --target-gene homt-1
+```
+
+### Full usage
+
+```
+brimer-plast --genome <FASTA> --annotations <GTF> <--target-gene | --target-transcript> [options]
+```
+
+Required:
+- `--genome` / `-g` — Genome FASTA file
+- `--annotations` / `-a` — Gene annotation GTF file
+- `--target-gene` or `--target-transcript` — Which gene/transcript to design primers for
+  (repeatable: `--target-gene GAPDH --target-gene ACTB` for multiple targets)
+
+Primer design options:
+- `--num-return` / `-n` — Number of candidate pairs per conserved exon chain (default: 50)
+- `--min-tm`, `--max-tm`, `--opt-tm` — Melting temperature range (default: 57/63/60 °C)
+- `--min-size`, `--max-size`, `--opt-size` — Primer length (default: 18/25/20 bp)
+- `--min-gc`, `--max-gc` — GC content percent (default: 40/60%)
+- `--product-min`, `--product-max` — Amplicon size range (default: 80-200 bp)
+- `--max-amplicon` — Maximum tnBLAST amplicon search length (default: 2000)
+
+Output options:
+- `--output-pdf <path>` — Write a PDF report with per-chain genome views.
+  Repeat once per target for multi-target runs
+  (e.g. `--output-pdf gapdh.pdf --output-pdf actb.pdf`).
+  If omitted, a report is auto-generated; use `--no-pdf` to suppress.
+- `--no-pdf` — Suppress PDF report generation entirely.
+- `--verbose` / `-v` — Increase verbosity. `-v` for pipeline progress,
+  `-vv` for per-pair fragment-list details and template coordinates.
+- `--tsv` — Tab-separated machine-readable output
+
+## Building the Electron app
+
+To run in development (requires Nix):
+```bash
+nix develop --command bash -c "cd electron && electron . --no-sandbox"
+```
+
 ## Development
 
 ```bash
@@ -141,26 +144,3 @@ pyright                   # type-check the codebase
 ruff check src/           # lint
 bash tests/fixtures/download-ce11.sh  # download C. elegans for integration tests
 ```
-
-## Output format
-
-Human-readable (default):
-```
-Pair Name            Forward (5'→3')             Tm(°C)    %GC   Reverse (5'→3')             Tm(°C)    %GC   Size
--------------------------------------------------------------------------------------------------------------------
-9746.1:45-199        TTCGTCGAAGGACTGCAGAC         60.0      55    TGCAGTGCTTTCGAGACCAT         60.0      50    281
-                                                         (TGCAGTGCTTTCGAGACCAT)
-```
-
-The first line shows the reverse primer as stored (same strand as forward).
-The indented second line shows the reverse-complement form (actual PCR binding strand).
-
-TSV (`--tsv`):
-```
-pair_name	forward_seq	reverse_seq	reverse_rc	forward_tm	reverse_tm	forward_gc	reverse_gc	product_size
-9746.1:45-199	TTCGTCGAAGGACTGCAGAC	TGCAGTGCTTTCGAGACCAT	TGCAGTGCTTTCGAGACCAT	60.0	60.0	55	50	281
-```
-
-## License
-
-GPLv2 — same as primer3 and primer3-py.

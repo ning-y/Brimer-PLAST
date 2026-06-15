@@ -9,13 +9,10 @@ borders, and dashed intron arrows.
 
 from __future__ import annotations
 
-from typing import Any
-
 from reportlab.lib import colors
-from reportlab.lib.units import inch
 from reportlab.platypus import Flowable
 
-from brimer_plast.models import ConservedExonChain, ExonInfo, GeneLocus, GenomicFragment, PrimerPair
+from brimer_plast.models import ConservedExonChain, ExonInfo, GeneLocus, PrimerPair
 
 # ── Colour palette ──────────────────────────────────────────────────────────
 PANEL_A_COLOR = colors.HexColor("#2166ac")  # blue - primer3
@@ -44,6 +41,7 @@ OVERVIEW_H = 15
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
+
 
 def _transcript_contains_chain(
     transcript_exons: list[ExonInfo],
@@ -110,6 +108,7 @@ def compute_zoom_bounds(
 
 # ── Diagram drawing helpers ─────────────────────────────────────────────────
 
+
 def _draw_intron(canvas, x1, x2, y, h, strand, dashed=False):
     canvas.setStrokeColor(colors.grey)
     canvas.setLineWidth(0.5)
@@ -133,8 +132,22 @@ def _draw_intron(canvas, x1, x2, y, h, strand, dashed=False):
     canvas.setDash()
 
 
-def _draw_fragments(canvas, fragments, y, h, view_min, view_span, origin_x, draw_w, color, fill, label, alignment):
+def _draw_fragments(  # noqa: E501
+    canvas,
+    fragments,
+    y,
+    h,
+    view_min,
+    view_span,
+    origin_x,
+    draw_w,
+    color,
+    fill,
+    label,
+    alignment,
+):
     """Draw one or more fragments for a primer, connecting with dashed lines if segmented."""
+
     def to_x(g):
         f = (g - view_min) / view_span
         return origin_x + f * draw_w
@@ -175,6 +188,7 @@ def _draw_fragments(canvas, fragments, y, h, view_min, view_span, origin_x, draw
 
 # ── Main drawing function ──────────────────────────────────────────────────
 
+
 def draw_gene_diagram(
     canvas,
     x,
@@ -204,11 +218,13 @@ def draw_gene_diagram(
     origin_x = x + LEFT_MARGIN
     draw_w = width - LEFT_MARGIN - RIGHT_MARGIN
 
-    def to_x_over(g): return origin_x + ((g - g_min) / g_span) * draw_w
+    def to_x_over(g):
+        return origin_x + ((g - g_min) / g_span) * draw_w
 
     v_span = max(1, v_max - v_min)
 
-    def to_x_zoom(g): return origin_x + ((g - v_min) / v_span) * draw_w
+    def to_x_zoom(g):
+        return origin_x + ((g - v_min) / v_span) * draw_w
 
     # ── 1. Header ────────────────────────────────────────────────────────────
     canvas.setFont("Helvetica-Bold", 8)
@@ -278,9 +294,7 @@ def draw_gene_diagram(
 
         # Label
         canvas.setFont("Helvetica", LABEL_FONT_SIZE)
-        canvas.setFillColor(
-            colors.black if is_contributing else colors.Color(0, 0, 0, alpha=0.5)
-        )
+        canvas.setFillColor(colors.black if is_contributing else colors.Color(0, 0, 0, alpha=0.5))
         max_label_chars = max(10, int((LEFT_MARGIN - 4) / 3.8))
         canvas.drawString(x, curr_y + 2, tid[:max_label_chars])
 
@@ -343,7 +357,8 @@ def draw_gene_diagram(
         canvas.setFont("Helvetica-Oblique", 7)
         canvas.setFillColor(colors.Color(0.5, 0.5, 0.5))
         canvas.drawString(
-            x, curr_y + 4,
+            x,
+            curr_y + 4,
             "No specificity-filtered primer pairs designed for this chain.",
         )
         curr_y -= PRIMER_ROW_H + PAIR_GAP
@@ -366,8 +381,18 @@ def draw_gene_diagram(
                 for index, (frags, label) in enumerate(all_pts):
                     alignment = "left" if index == 0 else "right"
                     _draw_fragments(
-                        canvas, frags, curr_y + 4, 4, v_min, v_span, origin_x, draw_w,
-                        PANEL_A_COLOR, PANEL_A_FILL, label, alignment,
+                        canvas,
+                        frags,
+                        curr_y + 4,
+                        4,
+                        v_min,
+                        v_span,
+                        origin_x,
+                        draw_w,
+                        PANEL_A_COLOR,
+                        PANEL_A_FILL,
+                        label,
+                        alignment,
                     )
 
             # Panel B (Red) - pre-computed tnBLAST fragments
@@ -382,8 +407,18 @@ def draw_gene_diagram(
                 for index, (frags, label) in enumerate(b_items):
                     alignment = "left" if index == 0 else "right"
                     _draw_fragments(
-                        canvas, frags, curr_y - 1, 4, v_min, v_span, origin_x, draw_w,
-                        PANEL_B_COLOR, PANEL_B_FILL, label, alignment,
+                        canvas,
+                        frags,
+                        curr_y - 1,
+                        4,
+                        v_min,
+                        v_span,
+                        origin_x,
+                        draw_w,
+                        PANEL_B_COLOR,
+                        PANEL_B_FILL,
+                        label,
+                        alignment,
                     )
 
             curr_y -= PRIMER_ROW_H + PAIR_GAP
@@ -393,8 +428,10 @@ def draw_gene_diagram(
 
 # ── Flowables ────────────────────────────────────────────────────────────────
 
+
 class _SequenceRow(Flowable):
     """Draws a single 100-base row of DNA sequence with indices."""
+
     def __init__(self, sequence: str, start_index: int, pairs: list[PrimerPair]):
         super().__init__()
         self.sequence = sequence
@@ -404,7 +441,8 @@ class _SequenceRow(Flowable):
         self.height = 3.5 * self.line_h
         self.width = 600
 
-    def wrap(self, aW, aH): return (self.width, self.height)
+    def wrap(self, aW, aH):  # noqa: N803
+        return (self.width, self.height)
 
     def draw(self):
         canv = self.canv
@@ -427,7 +465,7 @@ class _SequenceRow(Flowable):
 
         blocks = []
         for b in range(0, len(seq), 20):
-            blocks.append(seq[b:b+20])
+            blocks.append(seq[b : b + 20])
         canv.drawString(40, 0.5 * self.line_h, " ".join(blocks))
 
         end_idx = idx + len(seq) - 1
@@ -458,7 +496,7 @@ class _GeneDiagram(Flowable):
         self.width = width
         self.height = height
 
-    def wrap(self, aW, aH):
+    def wrap(self, aW, aH):  # noqa: N803
         # Clamp to the actual available width so we never exceed the
         # frame (which has 6pt internal padding on each side).
         if aW < self.width:
@@ -467,7 +505,14 @@ class _GeneDiagram(Flowable):
 
     def draw(self):
         draw_gene_diagram(
-            self.canv, 0, self.height - 30, self.width,
-            self.locus, self.chain, self.chain_pairs,
-            self.contributing_tids, self.v_min, self.v_max,
+            self.canv,
+            0,
+            self.height - 30,
+            self.width,
+            self.locus,
+            self.chain,
+            self.chain_pairs,
+            self.contributing_tids,
+            self.v_min,
+            self.v_max,
         )

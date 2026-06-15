@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import os
 import re
-import sys
 import subprocess
+import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -125,16 +125,17 @@ def run_tnblast(
             )
         except FileNotFoundError:
             raise FileNotFoundError(
-                "tntblast: command not found. Ensure tnBLAST is installed "
-                "and available on PATH."
+                "tntblast: command not found. Ensure tnBLAST is installed " "and available on PATH."
             ) from None
         except subprocess.TimeoutExpired:
             cmd_str = " ".join(cmd)
             # Log full command to stderr for debugging
             import logging
+
             logging.getLogger("brimer_plast.tnblast").error(
                 "tnBLAST timed out after %ss. Full command:\n%s",
-                timeout, cmd_str,
+                timeout,
+                cmd_str,
             )
             raise RuntimeError(
                 f"tnBLAST timed out after {timeout // 60} minute(s). "
@@ -144,9 +145,8 @@ def run_tnblast(
             ) from None
         if result.stderr:
             import logging
-            logging.getLogger("brimer_plast.tnblast").warning(
-                "tnBLAST stderr:\n%s", result.stderr
-            )
+
+            logging.getLogger("brimer_plast.tnblast").warning("tnBLAST stderr:\n%s", result.stderr)
         if result.returncode != 0:
             raise RuntimeError(
                 f"tnBLAST failed (exit {result.returncode}):\n"

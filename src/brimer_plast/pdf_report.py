@@ -58,13 +58,36 @@ DIAGRAM_PAIR_CAP = 1000
 
 # ── Report Builder ──────────────────────────────────────────────────────────
 
-def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, target_transcript, genome_path, annotations_path, genome_md5="", annotations_md5="", version_str="0.1.0", cli_args=None):
-    doc = SimpleDocTemplate(output_path, pagesize=landscape(A4), leftMargin=MARGIN, rightMargin=MARGIN, topMargin=MARGIN, bottomMargin=MARGIN)
+
+def build_pdf_report(  # noqa: E501
+    output_path,
+    chains,
+    locus,
+    filtered_pairs,
+    target_gene,
+    target_transcript,
+    genome_path,
+    annotations_path,
+    genome_md5="",
+    annotations_md5="",
+    version_str="",
+    cli_args=None,
+):
+    doc = SimpleDocTemplate(  # noqa: E501
+        output_path,
+        pagesize=landscape(A4),
+        leftMargin=MARGIN,
+        rightMargin=MARGIN,
+        topMargin=MARGIN,
+        bottomMargin=MARGIN,
+    )
     styles = getSampleStyleSheet()
 
     story = [
-        Paragraph(APP_TITLE, styles["Title"]),
-        Paragraph(f"v{version_str}", styles["Normal"]),
+        Paragraph(
+            f'{APP_TITLE}  <font size="10">{version_str}</font>',
+            styles["Title"],
+        ),
         HRFlowable(width="100%", color=colors.grey),
         Spacer(1, 8),
         Paragraph(f"Date: {datetime.now():%Y-%m-%d %H:%M:%S}", styles["Normal"]),
@@ -108,13 +131,12 @@ def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, ta
         diagram_base_h = (82 if has_others else 74) + n_trans * 11
 
         # Frame geometry
-        PAGE1_OVERHEAD = 138  # title, date, heading, legend, spacers
-        PER_CHAIN_OVERHEAD = 24  # "Chain:" subheading + spacer before each chain
+        page1_overhead = 138  # title, date, heading, legend, spacers
 
         def _max_pairs(overhead: float) -> int:
             return max(1, int((FRAME_H - overhead - diagram_base_h) // 20))
 
-        first_page_pairs = _max_pairs(PAGE1_OVERHEAD)
+        first_page_pairs = _max_pairs(page1_overhead)
         later_page_pairs = _max_pairs(0)
 
         # ── Per-chain genome views ─────────────────────────────────────────
@@ -144,8 +166,14 @@ def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, ta
 
                 story.append(
                     _GeneDiagram(
-                        locus, chain, page_pairs, contrib_tids, v_min, v_max,
-                        FRAME_W, h,
+                        locus,
+                        chain,
+                        page_pairs,
+                        contrib_tids,
+                        v_min,
+                        v_max,
+                        FRAME_W,
+                        h,
                     )
                 )
 
@@ -167,34 +195,42 @@ def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, ta
             fontName="Courier",
         )
 
-        data: list[list[str | Paragraph]] = [["Pair Name", "Chain", "Forward", "Tm", "GC%", "Reverse", "Tm", "GC%", "Size"]]
+        data: list[list[str | Paragraph]] = [  # noqa: E501
+            ["Pair Name", "Chain", "Forward", "Tm", "GC%", "Reverse", "Tm", "GC%", "Size"]
+        ]
         for p in filtered_pairs:
             rc_rev = reverse_complement(p.reverse_seq or "")
             rev_p = Paragraph(f"&nbsp;{p.reverse_seq}<br/>({rc_rev})", table_cell_style)
-            data.append([
-                p.pair_name or str(p.pair_number),
-                p.chain_id,
-                Paragraph(p.forward_seq or "", table_cell_style),
-                f"{p.forward_tm:.1f}",
-                f"{p.forward_gc:.0f}",
-                rev_p,
-                f"{p.reverse_tm:.1f}",
-                f"{p.reverse_gc:.0f}",
-                str(p.product_size)
-            ])
+            data.append(
+                [
+                    p.pair_name or str(p.pair_number),
+                    p.chain_id,
+                    Paragraph(p.forward_seq or "", table_cell_style),
+                    f"{p.forward_tm:.1f}",
+                    f"{p.forward_gc:.0f}",
+                    rev_p,
+                    f"{p.reverse_tm:.1f}",
+                    f"{p.reverse_gc:.0f}",
+                    str(p.product_size),
+                ]
+            )
 
         cw = [CONTENT_WIDTH * x for x in [0.08, 0.14, 0.18, 0.05, 0.05, 0.18, 0.05, 0.05, 0.10]]
         t = Table(data, colWidths=cw)
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
-            ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
-            ('FONTSIZE', (0,0), (-1,-1), 7),
-            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('LEFTPADDING', (0,0), (-1,-1), 2),
-        ]))
+        t.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                    ("FONTSIZE", (0, 0), (-1, -1), 7),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 2),
+                ]
+            )
+        )
         story.append(t)
     else:
-         story.append(Paragraph("No primer pairs passed specificity filtering.", styles["Normal"]))
+        story.append(Paragraph("No primer pairs passed specificity filtering.", styles["Normal"]))
 
     # ── 3. Run Information ──────────────────────────────────────────────────
     story.append(PageBreak())
@@ -202,16 +238,32 @@ def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, ta
     story.append(Spacer(1, 10))
 
     file_data = [
-        [Paragraph("<b>File type</b>", styles["Normal"]), Paragraph("<b>Location and Checksum</b>", styles["Normal"])],
-        ["Genome", Paragraph(f"{os.path.basename(genome_path)}<br/>(md5: {genome_md5})", styles["Normal"])],
-        ["Annotations", Paragraph(f"{os.path.basename(annotations_path)}<br/>(md5: {annotations_md5})", styles["Normal"])]
+        [
+            Paragraph("<b>File type</b>", styles["Normal"]),
+            Paragraph("<b>Location and Checksum</b>", styles["Normal"]),
+        ],  # noqa: E501
+        [
+            "Genome",
+            Paragraph(f"{os.path.basename(genome_path)}<br/>(md5: {genome_md5})", styles["Normal"]),
+        ],  # noqa: E501
+        [
+            "Annotations",
+            Paragraph(
+                f"{os.path.basename(annotations_path)}<br/>(md5: {annotations_md5})",
+                styles["Normal"],
+            ),
+        ],  # noqa: E501
     ]
-    ft = Table(file_data, colWidths=[CONTENT_WIDTH*0.25, CONTENT_WIDTH*0.75])
-    ft.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
-    ]))
+    ft = Table(file_data, colWidths=[CONTENT_WIDTH * 0.25, CONTENT_WIDTH * 0.75])
+    ft.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
     story.append(ft)
     story.append(Spacer(1, 15))
 
@@ -220,12 +272,16 @@ def build_pdf_report(output_path, chains, locus, filtered_pairs, target_gene, ta
         param_data = [["Parameter", "Value"]]
         for k, v in sorted(cli_args.items()):
             param_data.append([f"--{k}", str(v)])
-        pt = Table(param_data, colWidths=[CONTENT_WIDTH*0.4, CONTENT_WIDTH*0.6])
-        pt.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
-            ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
-            ('FONTSIZE', (0,0), (-1,-1), 8),
-        ]))
+        pt = Table(param_data, colWidths=[CONTENT_WIDTH * 0.4, CONTENT_WIDTH * 0.6])
+        pt.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                    ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ]
+            )
+        )
         story.append(pt)
 
     story.append(Spacer(1, 15))

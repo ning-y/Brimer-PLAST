@@ -26,7 +26,7 @@ from brimer_plast.gtf import (
     parse_gtf_all_transcripts,
     parse_gtf_grouped_by_transcript,
 )
-from brimer_plast.models import ConservedExonChain, ExonInfo, GeneLocus, GenomicFragment
+from brimer_plast.models import ConservedExonChain, ExonInfo, GeneLocus
 from brimer_plast.sequence import (
     _extract_sequence_from_genome,
     build_transcriptome_fasta,
@@ -342,10 +342,10 @@ def _compute_short_tid_length(transcript_ids: list[str]) -> int:
         return 5
 
     max_len = max(len(t) for t in transcript_ids)
-    for L in range(1, max_len + 1):
-        suffixes = [t[-L:] for t in transcript_ids]
+    for length in range(1, max_len + 1):
+        suffixes = [t[-length:] for t in transcript_ids]
         if len(set(suffixes)) == len(transcript_ids):
-            return L + 4
+            return length + 4
     return max_len + 4
 
 
@@ -387,9 +387,7 @@ def _pick_representative_for_chain(
     Raises ValueError if no transcript contains the chain's exons.
     """
     candidates = [
-        tid
-        for tid, exons in transcripts.items()
-        if _transcript_contains_chain(exons, chain.exons)
+        tid for tid, exons in transcripts.items() if _transcript_contains_chain(exons, chain.exons)
     ]
     if not candidates:
         raise ValueError(
@@ -399,7 +397,8 @@ def _pick_representative_for_chain(
 
     rep = min(candidates)  # alphanumerically first
     offset = _compute_chain_offset_in_transcript(
-        transcripts[rep], chain.exons[0],
+        transcripts[rep],
+        chain.exons[0],
     )
     return rep, offset
 
@@ -440,9 +439,7 @@ def _build_target_transcript_chain(
     gene_name = _find_gene_for_transcript(gtf_path, target_transcript)
     if gene_name:
         all_siblings = parse_gtf_grouped_by_transcript(gtf_path, target_gene=gene_name)
-        sibling_exon_lists = [
-            t for tid, t in all_siblings.items() if tid != target_transcript
-        ]
+        sibling_exon_lists = [t for tid, t in all_siblings.items() if tid != target_transcript]
         if sibling_exon_lists:
             unique_positions = _compute_unique_junction_positions(
                 junctions, template_order_exons, sibling_exon_lists
@@ -499,9 +496,7 @@ def _build_target_gene_chains(
                 template_order_exons = exons_in_template_order(chain.exons)
                 junctions = _compute_junction_positions(template_order_exons)
                 chain_id = f"{target_gene}_chain_{chain_idx}"
-                rep, offset = _pick_representative_for_chain(
-                    chain, transcripts
-                )
+                rep, offset = _pick_representative_for_chain(chain, transcripts)
                 result.append(
                     ConservedExonChain(
                         id=chain_id,
@@ -588,10 +583,17 @@ def get_target_information(
     try:
         if target_transcript:
             return _build_target_transcript_chain(
-                genome, target_transcript, gtf_path, transcripts, transcript_exon_lists,
+                genome,
+                target_transcript,
+                gtf_path,
+                transcripts,
+                transcript_exon_lists,
             )
         return _build_target_gene_chains(
-            genome, target_gene or "", transcripts, transcript_exon_lists,
+            genome,
+            target_gene or "",
+            transcripts,
+            transcript_exon_lists,
         )
     finally:
         genome.close()

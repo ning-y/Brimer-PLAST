@@ -6,7 +6,7 @@ tnBLAST has been run against both genome and transcriptome databases.
 
 from __future__ import annotations
 
-from brimer_plast.models import PrimerPair, GeneLocus
+from brimer_plast.models import GeneLocus, PrimerPair
 from brimer_plast.tnblast import AmpliconHit
 
 
@@ -24,7 +24,8 @@ def filter_specific_pairs(
 
     In junction mode (default, at least one primer spans an exon-exon junction),
     a pair passes if:
-      - genome count == 0   (junction-spanning primers don't match genome; avoid gDNA and processed pseudogenes)
+      - genome count == 0   (junction-spanning primers don't match genome;
+        avoid gDNA and processed pseudogenes)
       - all transcriptome hits map to the target gene
 
     In non-junction mode (intron-spanning), a pair passes if:

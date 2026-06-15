@@ -8,7 +8,8 @@ to a static placeholder.
 
 from __future__ import annotations
 
-from importlib.metadata import PackageNotFoundError, version as _metadata_version
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _metadata_version
 
 try:
     __version__ = _metadata_version("brimer-plast")

@@ -469,7 +469,7 @@ app.whenReady().then(() => {
       });
       return out.trim();
     } catch (_) {
-      return '0.1.0';
+      return '';
     }
   });
 

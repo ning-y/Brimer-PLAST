@@ -24,7 +24,6 @@ import primer3
 from brimer_plast.models import ExonInfo, PrimerPair
 from brimer_plast.sequence import exons_in_template_order
 
-
 # ── Named constants (single source of truth for default values) ──────────────
 
 PRIMER_NUM_RETURN = 50
@@ -262,9 +261,7 @@ def design_primers(
         pair = _build_pair_from_raw(raw, i, chain_id)
         if pair is None:
             continue
-        if required_set is not None and not _pair_spans_any_junction(
-            raw, i, required_set
-        ):
+        if required_set is not None and not _pair_spans_any_junction(raw, i, required_set):
             continue
         result.append(pair)
 

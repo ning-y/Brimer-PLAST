@@ -15,7 +15,6 @@ import pyfaidx
 from brimer_plast.gtf import parse_gtf_all_transcripts
 from brimer_plast.models import ExonInfo, GenomicFragment
 
-
 # ── helper ───────────────────────────────────────────────────────────────────
 
 COMPLEMENT = str.maketrans("ATCGatcg", "TAGCtagc")
@@ -182,7 +181,14 @@ def template_to_genomic(
                     g_end = exon.end - offset_in_exon
                     g_start = g_end - len_in_this_exon + 1
 
-                fragments.append(GenomicFragment(seqid=exon.seqid, start=int(g_start), end=int(g_end), strand=exon.strand))
+                fragments.append(
+                    GenomicFragment(  # noqa: E501
+                        seqid=exon.seqid,
+                        start=int(g_start),
+                        end=int(g_end),
+                        strand=exon.strand,
+                    )
+                )
                 remaining_primer_len -= len_in_this_exon
 
             current_template_pos += exon_len
@@ -200,7 +206,14 @@ def template_to_genomic(
                 g_end = exon.end
                 g_start = g_end - len_in_this_exon + 1
 
-            fragments.append(GenomicFragment(seqid=exon.seqid, start=int(g_start), end=int(g_end), strand=exon.strand))
+            fragments.append(
+                GenomicFragment(  # noqa: E501
+                    seqid=exon.seqid,
+                    start=int(g_start),
+                    end=int(g_end),
+                    strand=exon.strand,
+                )
+            )
             remaining_primer_len -= len_in_this_exon
 
     return fragments
@@ -223,5 +236,12 @@ def genomic_range_to_fragments(
         o_start = max(g_start, exon.start)
         o_end = min(g_end, exon.end)
         if o_start <= o_end:
-            fragments.append(GenomicFragment(seqid=exon.seqid, start=o_start, end=o_end, strand=exon.strand))
+            fragments.append(
+                GenomicFragment(  # noqa: E501
+                    seqid=exon.seqid,
+                    start=o_start,
+                    end=o_end,
+                    strand=exon.strand,
+                )
+            )
     return fragments

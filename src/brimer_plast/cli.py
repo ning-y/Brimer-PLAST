@@ -10,22 +10,22 @@ import typer
 
 from brimer_plast import __version__
 from brimer_plast.genome import reverse_complement
-from brimer_plast.log_config import configure_logging, get_logger
+from brimer_plast.log_config import configure_logging
 from brimer_plast.pdf_report import build_pdf_report
-from brimer_plast.pipeline import PipelineResult, dump_debug_info, run_pipeline
+from brimer_plast.pipeline import dump_debug_info, run_pipeline
 from brimer_plast.primer import (
-    PRIMER_NUM_RETURN,
-    PRIMER_OPT_SIZE,
-    PRIMER_MIN_SIZE,
+    DEFAULT_PRIMER_ARGS,
+    PRIMER_MAX_GC,
     PRIMER_MAX_SIZE,
-    PRIMER_OPT_TM,
-    PRIMER_MIN_TM,
     PRIMER_MAX_TM,
     PRIMER_MIN_GC,
-    PRIMER_MAX_GC,
-    PRIMER_PRODUCT_MIN,
+    PRIMER_MIN_SIZE,
+    PRIMER_MIN_TM,
+    PRIMER_NUM_RETURN,
+    PRIMER_OPT_SIZE,
+    PRIMER_OPT_TM,
     PRIMER_PRODUCT_MAX,
-    DEFAULT_PRIMER_ARGS,
+    PRIMER_PRODUCT_MIN,
 )
 
 app = typer.Typer(
@@ -71,8 +71,6 @@ def _run_for_target(
     Returns:
         A list of warning strings accumulated during the run.
     """
-    log = get_logger()
-
     target_gene = target_key if target_type == "gene" else None
     target_transcript = target_key if target_type == "transcript" else None
 
@@ -110,7 +108,6 @@ def _run_for_target(
     chains = result.chains
     locus = result.locus
     filtered = result.filtered_pairs
-    flat_pairs = result.all_candidates
 
     # ── Output results ─────────────────────────────────────────────────────
     typer.echo("")
@@ -142,9 +139,7 @@ def _run_for_target(
                     f"{pair.reverse_tm:<8.1f} {pair.reverse_gc:<5.0f} "
                     f"{pair.product_size:<6}"
                 )
-                typer.echo(
-                    f"{'':<20} {'':<28} {'':<8} {'':<5} {f'({rc_rev})':<28}"
-                )
+                typer.echo(f"{'':<20} {'':<28} {'':<8} {'':<5} {f'({rc_rev})':<28}")
     else:
         typer.echo("No specificity-filtered primer pairs to display.")
 
@@ -323,7 +318,6 @@ def main(
     priority.
     """
     configure_logging(verbose)
-    log = get_logger()
 
     # ── Validate target arguments ──────────────────────────────────────────
     if not target_gene and not target_transcript:
@@ -363,8 +357,6 @@ def main(
         )
         raise typer.Exit(code=1)
 
-    genome_md5 = calculate_md5(genome)
-    annotations_md5 = calculate_md5(annotations)
     # ── Loop over each target (independent invocation) ─────────────────
     all_warnings: dict[str, list[str]] = {}
     for idx, (target_type, target_key) in enumerate(targets):

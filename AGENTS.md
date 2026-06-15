@@ -4,7 +4,7 @@ This project is developed from scratch.
 
 ## Development principles
 
-- **Test-driven development.** Write the test first, then implement. Every `src/` module should have a corresponding test file. Run `pytest` frequently.
+- **Test-driven development.** Write the test first, then implement. Every `src/` module should have a corresponding test file. Run `pytest` and `ruff` frequently.
 - **Keep `CONTEXT.md` current.** When a new domain term enters the design, add it to the glossary.
 - **Keep README.md current.** When CLI flags, output format, or behavior changes, update the user-facing documentation.
 
