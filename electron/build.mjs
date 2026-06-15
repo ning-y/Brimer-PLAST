@@ -30,7 +30,7 @@ try {
 version = version.replace(/^(\d+\.\d+\.\d+).*$/, '$1');
 
 const flagStr = process.argv.slice(2).join(' ');
-execSync(`npx electron-builder ${flagStr} --extraMetadata.version=${version}`, {
+execSync(`npx electron-builder ${flagStr} -c.extraMetadata.version=${version}`, {
   stdio: 'inherit',
   shell: true,
 });
