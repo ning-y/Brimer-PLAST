@@ -30,7 +30,7 @@ from brimer_plast.models import (
     GeneLocus,
     PrimerPair,
 )
-from brimer_plast.primer import dedup_and_prioritize, design_primers_dual_mode
+from brimer_plast.primer import PRIMER_NUM_RETURN, dedup_and_prioritize, design_primers_dual_mode
 from brimer_plast.tnblast import (
     AmpliconHit,
     _parse_tnblast_amplicons,
@@ -219,7 +219,7 @@ def run_pipeline(
 
     # ── Step 2: Design candidate primers (dual-mode) ──────────────────────
     log.info("Designing primers with primer3 (junction + intron modes)...")
-    num_return = primer_args.get("PRIMER_NUM_RETURN", 50)
+    num_return = primer_args.get("PRIMER_NUM_RETURN", PRIMER_NUM_RETURN)
     junction_candidates: list[PrimerPair] = []
     intron_candidates: list[PrimerPair] = []
 

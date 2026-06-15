@@ -111,7 +111,7 @@ Required:
   (repeatable: `--target-gene GAPDH --target-gene ACTB` for multiple targets)
 
 Primer design options:
-- `--num-return` / `-n` — Number of candidate pairs per conserved exon chain (default: 50)
+- `--num-return` / `-n` — Number of candidate pairs per conserved exon chain (default: 10)
 - `--min-tm`, `--max-tm`, `--opt-tm` — Melting temperature range (default: 57/63/60 °C)
 - `--min-size`, `--max-size`, `--opt-size` — Primer length (default: 18/25/20 bp)
 - `--min-gc`, `--max-gc` — GC content percent (default: 40/60%)

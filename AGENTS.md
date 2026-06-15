@@ -132,3 +132,4 @@ Failed `edit` calls can still partially corrupt the file (e.g. appending garbage
 - **electron** — Electron main-process runtime, sidecar process lifecycle, and IPC message handling
 - **electron-packaging** — Electron app bundling, electron-builder config, sidecar resource discovery
 - **electron-ui** — Electron renderer UI, branding, header, theme, version display
+- **primer-design** — Primer3 parameter defaults, primer design constants, and candidate count tuning

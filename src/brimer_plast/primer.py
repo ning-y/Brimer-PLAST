@@ -26,7 +26,7 @@ from brimer_plast.sequence import exons_in_template_order
 
 # ── Named constants (single source of truth for default values) ──────────────
 
-PRIMER_NUM_RETURN = 50
+PRIMER_NUM_RETURN = 10
 PRIMER_OPT_SIZE = 20
 PRIMER_MIN_SIZE = 18
 PRIMER_MAX_SIZE = 25
