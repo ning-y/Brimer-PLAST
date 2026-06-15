@@ -176,7 +176,7 @@ jobs:
         working-directory: electron
 
       - name: Build Electron installer
-        run: npx electron-builder ${{ matrix.builder-flag }}
+        run: node build.mjs ${{ matrix.builder-flag }}
         working-directory: electron
 
       - name: Upload installer

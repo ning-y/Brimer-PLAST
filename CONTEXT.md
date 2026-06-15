@@ -8,10 +8,15 @@ open alternative to NCBI's Primer-BLAST.
 
 **App version string**:
 A PEP 440 compliant version string derived from git tags by setuptools-scm.
-``__version__`` lives in ``_version.py`` and is the single authority used by both
-the PDF report header and the Electron title bar (via a Python one-shot IPC call).
-Examples: ``0.1.0`` (at tag), ``0.1.0.dev3+ga1b2c3d`` (after tag).
-The Electron static fallback is ``0.1.0``.
+The git tag (e.g. ``v0.1.1``) is the single source of truth.  ``__version__``
+lives in ``_version.py`` and is the authority used by both the PDF report header
+and the Electron title bar (via a Python one-shot IPC call).
+Examples: ``0.1.1`` (at tag), ``0.1.1.dev3+ga1b2c3d`` (after tag).
+
+All hardcoded version fallbacks (``_version.py``, ``electron/package.json``,
+``pyproject.toml``) use the sentinel ``0.0.0`` to indicate that the real version
+comes from the git tag at build time.  The Electron installer's version is
+injected via ``electron/build.mjs`` on every build.
 
 **Brimer-PLAST**:
 The tool itself. A wrapper that orchestrates primer3 (via primer3-py) and tnBLAST

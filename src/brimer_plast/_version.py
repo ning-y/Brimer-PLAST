@@ -14,4 +14,4 @@ from importlib.metadata import version as _metadata_version
 try:
     __version__ = _metadata_version("brimer-plast")
 except (PackageNotFoundError, Exception):
-    __version__ = "0.1.0"
+    __version__ = "0.0.0"
