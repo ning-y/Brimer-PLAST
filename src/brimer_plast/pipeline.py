@@ -560,23 +560,18 @@ def dump_debug_info(
         log.debug(f"  Pair {pnum} (chain: {pair.chain_id})")
         log.debug(f"    Product size: {pair.product_size}  Penalty: {pair.pair_penalty}")
         log.debug(f"    Forward ({pair.forward_len} bp): {pair.forward_seq}")
-        log.debug(
-            f"      Primer3 (blue): {[(f.seqid, f.start, f.end) for f in pair.primer3_forward_fragments]}"  # noqa: E501
-        )
-        log.debug(
-            f"      tnBLAST (red):  {[(f.seqid, f.start, f.end) for f in pair.tnblast_forward_fragments]}"  # noqa: E501
-        )
+        fwd_p3 = [(f.seqid, f.start, f.end) for f in pair.primer3_forward_fragments]
+        log.debug(f"      Primer3 (blue): {fwd_p3}")
+        fwd_tn = [(f.seqid, f.start, f.end) for f in pair.tnblast_forward_fragments]
+        log.debug(f"      tnBLAST (red):  {fwd_tn}")
         log.debug(f"    Reverse ({pair.reverse_len} bp): {pair.reverse_seq}")
-        log.debug(
-            f"      Primer3 (blue): {[(f.seqid, f.start, f.end) for f in pair.primer3_reverse_fragments]}"  # noqa: E501
-        )
-        log.debug(
-            f"      tnBLAST (red):  {[(f.seqid, f.start, f.end) for f in pair.tnblast_reverse_fragments]}"  # noqa: E501
-        )
+        rev_p3 = [(f.seqid, f.start, f.end) for f in pair.primer3_reverse_fragments]
+        log.debug(f"      Primer3 (blue): {rev_p3}")
+        rev_tn = [(f.seqid, f.start, f.end) for f in pair.tnblast_reverse_fragments]
+        log.debug(f"      tnBLAST (red):  {rev_tn}")
         if pair.forward_start is not None and pair.forward_len is not None:
-            log.debug(
-                f"      Forward template 1-based: {pair.forward_start + 1}-{pair.forward_start + pair.forward_len}"  # noqa: E501
-            )
+            fwd_end = pair.forward_start + pair.forward_len
+            log.debug(f"      Forward template 1-based: {pair.forward_start + 1}-{fwd_end}")
         if pair.reverse_start is not None and pair.reverse_len is not None:
             r1 = pair.reverse_start - pair.reverse_len + 2
             r2 = pair.reverse_start + 1

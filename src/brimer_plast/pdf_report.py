@@ -59,7 +59,7 @@ DIAGRAM_PAIR_CAP = 1000
 # ── Report Builder ──────────────────────────────────────────────────────────
 
 
-def build_pdf_report(  # noqa: E501
+def build_pdf_report(
     output_path,
     chains,
     locus,
@@ -73,7 +73,7 @@ def build_pdf_report(  # noqa: E501
     version_str="",
     cli_args=None,
 ):
-    doc = SimpleDocTemplate(  # noqa: E501
+    doc = SimpleDocTemplate(
         output_path,
         pagesize=landscape(A4),
         leftMargin=MARGIN,
@@ -195,7 +195,7 @@ def build_pdf_report(  # noqa: E501
             fontName="Courier",
         )
 
-        data: list[list[str | Paragraph]] = [  # noqa: E501
+        data: list[list[str | Paragraph]] = [
             ["Pair Name", "Chain", "Forward", "Tm", "GC%", "Reverse", "Tm", "GC%", "Size"]
         ]
         for p in filtered_pairs:
@@ -241,18 +241,18 @@ def build_pdf_report(  # noqa: E501
         [
             Paragraph("<b>File type</b>", styles["Normal"]),
             Paragraph("<b>Location and Checksum</b>", styles["Normal"]),
-        ],  # noqa: E501
+        ],
         [
             "Genome",
             Paragraph(f"{os.path.basename(genome_path)}<br/>(md5: {genome_md5})", styles["Normal"]),
-        ],  # noqa: E501
+        ],
         [
             "Annotations",
             Paragraph(
                 f"{os.path.basename(annotations_path)}<br/>(md5: {annotations_md5})",
                 styles["Normal"],
             ),
-        ],  # noqa: E501
+        ],
     ]
     ft = Table(file_data, colWidths=[CONTENT_WIDTH * 0.25, CONTENT_WIDTH * 0.75])
     ft.setStyle(

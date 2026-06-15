@@ -132,7 +132,7 @@ def _draw_intron(canvas, x1, x2, y, h, strand, dashed=False):
     canvas.setDash()
 
 
-def _draw_fragments(  # noqa: E501
+def _draw_fragments(
     canvas,
     fragments,
     y,

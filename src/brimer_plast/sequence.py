@@ -182,7 +182,7 @@ def template_to_genomic(
                     g_start = g_end - len_in_this_exon + 1
 
                 fragments.append(
-                    GenomicFragment(  # noqa: E501
+                    GenomicFragment(
                         seqid=exon.seqid,
                         start=int(g_start),
                         end=int(g_end),
@@ -207,7 +207,7 @@ def template_to_genomic(
                 g_start = g_end - len_in_this_exon + 1
 
             fragments.append(
-                GenomicFragment(  # noqa: E501
+                GenomicFragment(
                     seqid=exon.seqid,
                     start=int(g_start),
                     end=int(g_end),
@@ -237,7 +237,7 @@ def genomic_range_to_fragments(
         o_end = min(g_end, exon.end)
         if o_start <= o_end:
             fragments.append(
-                GenomicFragment(  # noqa: E501
+                GenomicFragment(
                     seqid=exon.seqid,
                     start=o_start,
                     end=o_end,
