@@ -8,9 +8,18 @@ open alternative to NCBI's Primer-BLAST.
 
 **App version string**:
 A PEP 440 compliant version string derived from git tags by setuptools-scm.
-The git tag (e.g. ``v0.1.1``) is the single source of truth.  ``__version__``
-lives in ``_version.py`` and is the authority used by both the PDF report header
-and the Electron title bar (via a Python one-shot IPC call).
+The git tag (e.g. ``v0.1.1``) is the single source of truth. ``__version__``
+lives in ``_version.py`` and is the authority used by the PDF report header.
+The Electron title bar gets its version from a dual-source IPC handler:
+
+1. **Development path** — ``python3 -c "from brimer_plast import __version__"``
+   (a one-shot IPC call via ``execSync``). This gives the full semver with
+   dev/local suffixes.
+2. **Production path** — ``app.getVersion()``, which reads the version embedded
+   in the Electron package.json by ``electron/build.mjs`` (``--extraMetadata.version``).
+
+If Python is unavailable (production AppImage) and ``app.getVersion()`` returns
+``0.0.0`` (the sentinel for un-built development), the handler returns ``''``.
 Examples: ``0.1.1`` (at tag), ``0.1.1.dev3+ga1b2c3d`` (after tag).
 
 All hardcoded version fallbacks (``_version.py``, ``electron/package.json``,

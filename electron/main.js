@@ -462,15 +462,21 @@ app.whenReady().then(() => {
 
   ipcMain.handle('get-version', async () => {
     try {
+      // Dev path: ask Python directly (gives full dev/local suffixes)
       const { execSync } = require('child_process');
       const out = execSync('python3 -c "from brimer_plast import __version__; print(__version__)"', {
         encoding: 'utf-8',
         timeout: 10000,
       });
-      return out.trim();
-    } catch (_) {
-      return '';
-    }
+      const v = out.trim();
+      if (v) return v;
+    } catch (_) {}
+    // Production path: use version embedded in Electron package.json
+    try {
+      const v = app.getVersion();
+      if (v && v !== '0.0.0') return v;
+    } catch (_) {}
+    return '';
   });
 
   ipcMain.handle('open-pdf', async (_event, filePath) => {
