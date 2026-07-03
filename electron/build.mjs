@@ -29,6 +29,15 @@ try {
 // (e.g. .dev3) and local suffixes (+gdeadbeef) are dropped.
 version = version.replace(/^(\d+\.\d+\.\d+).*$/, '$1');
 
+// Safety net: if setuptools-scm could not find a real git tag it falls
+// back to fallback_version (0.0.0), which guess-next-dev bumps to
+// 0.0.1.devN+gXXXX.  Both 0.0.0 and 0.0.1 from this path are bogus;
+// use the sentinel so the Electron UI filters it out rather than
+// displaying an incorrect version.
+if (version === '0.0.0' || version === '0.0.1') {
+  version = '0.0.0';
+}
+
 const flagStr = process.argv.slice(2).join(' ');
 execSync(`npx electron-builder ${flagStr} -c.extraMetadata.version=${version}`, {
   stdio: 'inherit',
