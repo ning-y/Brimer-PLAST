@@ -24,18 +24,19 @@ try {
   version = '0.0.0';
 }
 
-// Strip everything after the major.minor.patch triplet so the result
-// is always valid npm semver for electron-builder.  Pre-release suffixes
-// (e.g. .dev3) and local suffixes (+gdeadbeef) are dropped.
-version = version.replace(/^(\d+\.\d+\.\d+).*$/, '$1');
-
-// Safety net: if setuptools-scm could not find a real git tag it falls
-// back to fallback_version (0.0.0), which guess-next-dev bumps to
-// 0.0.1.devN+gXXXX.  Both 0.0.0 and 0.0.1 from this path are bogus;
-// use the sentinel so the Electron UI filters it out rather than
-// displaying an incorrect version.
-if (version === '0.0.0' || version === '0.0.1') {
+// Check for bogus fallback versions before conversion.
+// setuptools-scm's fallback_version is "0.0.0"; if no real git tag
+// exists guess-next-dev bumps it to 0.0.1.devN+gXXXX.  Both are
+// meaningless — use the sentinel so the UI filters them out.
+if (/^0\.0\.\d/.test(version)) {
   version = '0.0.0';
+} else {
+  // Convert PEP 440 version to npm semver for electron-builder.
+  // The only difference is the pre-release separator:
+  //   PEP 440:  ".dev"  (e.g. 0.1.2.dev2+g9fc1cb508)
+  //   npm:      "-dev." (e.g. 0.1.2-dev.2+g9fc1cb508)
+  // Clean tags without a pre-release (0.1.1) pass through unchanged.
+  version = version.replace(/\.dev(\d+)/, '-dev.$1');
 }
 
 const flagStr = process.argv.slice(2).join(' ');
