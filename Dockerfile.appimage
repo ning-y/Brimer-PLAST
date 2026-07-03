@@ -56,7 +56,7 @@ RUN pyinstaller \
 # ── Electron deps + AppImage ──────────────────────────────────────
 WORKDIR /app/electron
 RUN npm install --silent
-RUN npx electron-builder --linux AppImage
+RUN node build.mjs --linux AppImage
 
 # ── Extract artifact ───────────────────────────────────────────────
 RUN mkdir -p /output && cp dist/*.AppImage /output/

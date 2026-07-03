@@ -424,8 +424,21 @@ app.whenReady().then(() => {
     const { _requestId, pdf_output_dir, ...rest } = params;
     const reportsDir = path.join(app.getPath('userData'), 'reports');
     const debugDir = path.join(app.getPath('userData'), 'debug-logs');
+
+    // Determine version for sidecar (PDF report header).
+    // In dev: app.getVersion() returns "0.0.0" (sentinel) so we pass
+    // empty string — the sidecar falls back to brimer_plast.__version__.
+    // In production: app.getVersion() returns the version injected by
+    // build.mjs, which the sidecar uses directly.
+    let versionStr = '';
+    try {
+      const v = app.getVersion();
+      if (v && v !== '0.0.0') versionStr = v;
+    } catch (_) {}
+
     const fullParams = {
       ...rest,
+      version_str: versionStr,
       pdf_output_dir: reportsDir,
       debug_dir: debugDir,
       tnblast_timeout: parseTntblastTimeout(),
@@ -448,29 +461,32 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('get-app-title', async () => {
-    try {
-      const { execSync } = require('child_process');
-      const out = execSync('python3 -c "from brimer_plast import APP_TITLE; print(APP_TITLE)"', {
-        encoding: 'utf-8',
-        timeout: 10000,
-      });
-      return out.trim();
-    } catch (_) {
-      return 'Brimer-PLAST by Wang Linfa Lab';
+    if (!app.isPackaged) {
+      try {
+        const { execSync } = require('child_process');
+        const out = execSync('python3 -c "from brimer_plast import APP_TITLE; print(APP_TITLE)"', {
+          encoding: 'utf-8',
+          timeout: 10000,
+        });
+        return out.trim();
+      } catch (_) {}
     }
+    return 'Brimer-PLAST by Wang Linfa Lab';
   });
 
   ipcMain.handle('get-version', async () => {
-    try {
-      // Dev path: ask Python directly (gives full dev/local suffixes)
-      const { execSync } = require('child_process');
-      const out = execSync('python3 -c "from brimer_plast import __version__; print(__version__)"', {
-        encoding: 'utf-8',
-        timeout: 10000,
-      });
-      const v = out.trim();
-      if (v) return v;
-    } catch (_) {}
+    if (!app.isPackaged) {
+      try {
+        // Dev path: ask Python directly (gives full dev/local suffixes)
+        const { execSync } = require('child_process');
+        const out = execSync('python3 -c "from brimer_plast import __version__; print(__version__)"', {
+          encoding: 'utf-8',
+          timeout: 10000,
+        });
+        const v = out.trim();
+        if (v) return v;
+      } catch (_) {}
+    }
     // Production path: use version embedded in Electron package.json
     try {
       const v = app.getVersion();

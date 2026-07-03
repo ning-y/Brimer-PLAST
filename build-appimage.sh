@@ -53,7 +53,7 @@ rm -rf /app/build /app/*.spec
 # Build Electron + AppImage
 cd /app/electron
 npm install 2>&1 | tail -5
-npx electron-builder --linux AppImage 2>&1 | tail -15
+node build.mjs --linux AppImage 2>&1 | tail -15
 
 echo ""
 echo "=== Build complete ==="

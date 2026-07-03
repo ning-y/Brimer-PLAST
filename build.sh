@@ -28,7 +28,7 @@ cd electron
 npm install --silent
 
 echo "=== 5. Build AppImage ==="
-npx electron-builder --linux AppImage
+node build.mjs --linux AppImage
 
 echo "=== Done ==="
 ls -lh dist/*.AppImage 2>/dev/null || echo "Check electron/dist/ for output"

@@ -171,6 +171,12 @@ def handle_run_pipeline(rid: int, params: dict) -> None:
     target_gene = target_key if target_type == "gene" else None
     target_transcript = target_key if target_type == "transcript" else None
 
+    # Version string for PDF report header.  Electron main passes this from
+    # app.getVersion() (correct in CI production).  In dev mode (nix develop)
+    # or when missing, fall back to brimer_plast.__version__ (works when
+    # running directly via python3, but may return "0.0.0" inside PyInstaller).
+    version_str = params.get("version_str", "") or brimer_plast.__version__
+
     # ── Run pipeline ────────────────────────────────────────────────────
     send({"id": rid, "status": "progress", "message": "Starting pipeline...", "pct": 5})
     _write_debug_log(log_path, {"event": "progress", "pct": 5, "message": "Starting pipeline..."})
@@ -221,6 +227,7 @@ def handle_run_pipeline(rid: int, params: dict) -> None:
                 target_transcript=target_transcript,
                 genome_path=str(genome),
                 annotations_path=str(annotations),
+                version_str=version_str,
             )
             pdf_path = str(pdf_full)
         except Exception as e:
