@@ -33,10 +33,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          # Fetch tags so setuptools-scm can derive the correct version
-          # from git tags (e.g. v0.1.1) instead of falling back to the
-          # guess-next-dev fallback (which bumps 0.0.0 to 0.0.1).
-          fetch-tags: true
+          # Fetch full history so setuptools-scm can find git tags
+          # (v0.1.1, etc.) via git describe.  Shallow clones (depth=1)
+          # fetch tag refs but not the commits they point to, so
+          # setuptools-scm can't walk ancestors from HEAD to the tag.
+          fetch-depth: 0
 
       # ── 1. Compile tnBLAST ──────────────────────────────────
       - name: Download tnBLAST source
