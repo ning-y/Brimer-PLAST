@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.1.2 (2026-07-05)
+
+Electron production hardening — guard Python subprocess behind `app.isPackaged`
+and fall back to `app.getVersion()` for the version string. CI and packaging
+fixes for reliable tag-based version derivation.
+
+**Changes:**
+- Guard Python subprocess calls (`get-app-title`, `get-version`) behind
+  `app.isPackaged` in production (Electron AppImage/package)
+- Fall back to `app.getVersion()` when Python import fails in production
+- Pass full version string through to electron-builder (PEP 440 → semver
+  conversion with `.devN` → `-dev.N` fix)
+- Use `fetch-depth: 0` instead of `fetch-tags` in CI checkout for correct
+  setuptools-scm version derivation on tag pushes
+- Add CI permission `contents: write` to release job for auto-release
+- Update CONTEXT.md with versioning model, per-chain genome view, and
+  contributing/non-contributing transcript concepts
+
 ## v0.1.1 (2026-06-15)
 
 Versioning restructure — git tags are now the sole source of truth.
