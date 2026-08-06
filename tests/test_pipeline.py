@@ -9,7 +9,7 @@ from brimer_plast.models import (
     GenomicFragment,
     PrimerPair,
 )
-from brimer_plast.pipeline import PipelineResult, dump_debug_info
+from brimer_plast.pipeline import PipelineResult, dump_debug_info, make_pair_name
 
 
 class TestPipelineResult:
@@ -103,3 +103,24 @@ class TestDumpDebugInfo:
         result = PipelineResult()
         dump_debug_info(result, log=logger)
         assert "DEBUG DUMP" in caplog.text
+
+class TestMakePairName:
+    """Pair naming: amplicon coordinates must match primer3 product size."""
+
+    def test_name_amplicon_spans_matching_primer3_product_size(self):
+        """PRIMER_RIGHT is the 5' base of the reverse primer, so the last
+        amplicon base is reverse_start + 1 (1-based), not reverse_start + len."""
+        # product_size == reverse_start - forward_start + 1 == 130
+        name = make_pair_name("95388", 0, 645, 774)
+        assert name == "95388:646-775"
+
+    def test_name_honours_transcript_offset(self):
+        name = make_pair_name("95388", 100, 645, 774)
+        assert name == "95388:746-875"
+
+    def test_name_matches_product_size_arithmetic(self):
+        # amplicon length (end - start + 1) must equal reverse_start - forward_start + 1
+        for fwd_start, rev_start in [(359, 545), (106, 274), (80, 179)]:
+            name = make_pair_name("T", 0, fwd_start, rev_start)
+            start, end = map(int, name.split(":")[1].split("-"))
+            assert end - start + 1 == rev_start - fwd_start + 1

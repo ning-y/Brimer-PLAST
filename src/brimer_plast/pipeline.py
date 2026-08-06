@@ -39,6 +39,27 @@ from brimer_plast.tnblast import (
 )
 
 
+def make_pair_name(
+    short_tid: str,
+    transcript_offset: int,
+    forward_start: int,
+    reverse_start: int,
+) -> str:
+    """Build a primer pair name ``{short_tid}:{amplicon_start}-{amplicon_end}``.
+
+    Coordinates are 1-based in the mature mRNA of the representative
+    transcript.  ``forward_start`` and ``reverse_start`` are primer3 0-based
+    template positions.  Primer3's ``PRIMER_RIGHT`` is the 5' (outermost)
+    base of the reverse primer, which is already the last template base the
+    amplicon covers, so the amplicon's final base is ``reverse_start + 1``
+    (not ``reverse_start + reverse_len``, which would count the reverse
+    primer twice).
+    """
+    amplicon_start = transcript_offset + forward_start + 1
+    amplicon_end = transcript_offset + reverse_start + 1
+    return f"{short_tid}:{amplicon_start}-{amplicon_end}"
+
+
 @dataclass
 class PipelineResult:
     """Structured result from a single pipeline run."""
@@ -278,15 +299,13 @@ def run_pipeline(
     for pair in all_flat_pairs:
         chain = chain_map[pair.chain_id]
         short_tid = chain.representative_tid[-chain.short_tid_length :]
-        if (
-            pair.forward_start is not None
-            and pair.forward_len is not None
-            and pair.reverse_start is not None
-            and pair.reverse_len is not None
-        ):
-            a_start = chain.transcript_offset + pair.forward_start + 1
-            a_end = chain.transcript_offset + pair.reverse_start + pair.reverse_len
-            pair.pair_name = f"{short_tid}:{a_start}-{a_end}"
+        if pair.forward_start is not None and pair.reverse_start is not None:
+            pair.pair_name = make_pair_name(
+                short_tid,
+                chain.transcript_offset,
+                pair.forward_start,
+                pair.reverse_start,
+            )
         else:
             pair.pair_name = f"{short_tid}:?"
 

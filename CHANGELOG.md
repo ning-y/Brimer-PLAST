@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.1.3 (2026-08-06)
+
+Bug fix — primer pair names now report true amplicon coordinates.
+
+**Changes:**
+- Fix primer pair name so the end coordinate no longer counts the reverse
+  primer twice (primer3's `PRIMER_RIGHT` is the 5'/outermost base of the
+  reverse primer). Pair-name spans now match the reported product size.
+- Extract a tested `make_pair_name()` helper; add `TestMakePairName`
+  regression tests.
+- Add bug ticket `docs/tickets/0001` and an archival correction note at the
+  top of ADR 0002 (its recorded decision is left untouched).
+
 ## v0.1.2 (2026-07-05)
 
 Electron production hardening — guard Python subprocess behind `app.isPackaged`

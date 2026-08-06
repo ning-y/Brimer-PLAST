@@ -1,3 +1,10 @@
+> **Archival correction (2026-06-15)**: The pair-name end-coordinate formula
+> documented below (``chain_offset + reverse_start + reverse_len``) was found
+> to overstate the amplicon by ``reverse_len - 1``, because Primer3's
+> ``PRIMER_RIGHT`` is already the 5' (outermost) base of the reverse primer.
+> This is fixed in ``src/brimer_plast/pipeline.py`` (``make_pair_name`` uses
+> ``reverse_start + 1``). See `docs/tickets/0001-primer-pair-name-amplicon-end.md`.
+
 # Primer pair names use fifth-shortest disambiguating transcript suffix
 
 Primer pairs are named ``{short_tid}:{amplicon_start}-{amplicon_end}``, where
